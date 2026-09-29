@@ -346,6 +346,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: admin.php?tab=reports");
         exit();
     }
+
+    // H. Push Broadcast Notification (To all users and/or guests on index.php)
+    elseif ($action === 'admin_push_broadcast') {
+        $title    = trim($_POST['notice_title'] ?? '');
+        $message  = trim($_POST['notice_message'] ?? '');
+        $target   = trim($_POST['target_audience'] ?? 'everyone');
+        $type     = in_array($_POST['alert_type'] ?? '', ['info', 'warning', 'success']) ? $_POST['alert_type'] : 'info';
+
+        if (empty($title) || empty($message)) {
+            set_flash('error', 'Notification title and message are required.');
+        } else {
+            try {
+                // If targeting guests / homepage or everyone
+                if ($target === 'guests_index' || $target === 'everyone') {
+                    $stmt = $pdo->prepare("
+                        INSERT INTO notifications (user_id, item_id, title, message, target_audience, alert_type)
+                        VALUES (NULL, NULL, :title, :msg, :target, :type)
+                    ");
+                    $stmt->execute([
+                        ':title'  => $title,
+                        ':msg'    => $message,
+                        ':target' => $target,
+                        ':type'   => $type
+                    ]);
+                }
+
+                // If targeting all registered users or everyone
+                if ($target === 'all_users' || $target === 'everyone') {
+                    $users = $pdo->query("SELECT id FROM users")->fetchAll(PDO::FETCH_COLUMN);
+                    if (!empty($users)) {
+                        $uStmt = $pdo->prepare("
+                            INSERT INTO notifications (user_id, item_id, title, message, target_audience, alert_type)
+                            VALUES (:uid, NULL, :title, :msg, :target, :type)
+                        ");
+                        foreach ($users as $uid) {
+                            $uStmt->execute([
+                                ':uid'    => $uid,
+                                ':title'  => $title,
+                                ':msg'    => $message,
+                                ':target' => $target,
+                                ':type'   => $type
+                            ]);
+                        }
+                    }
+                }
+
+                $reachDesc = ($target === 'everyone') ? 'all registered students & homepage guests' : (($target === 'guests_index') ? 'homepage guests (index.php)' : 'all registered students');
+                set_flash('success', "Broadcast notification successfully pushed to {$reachDesc}.");
+            } catch (PDOException $e) {
+                set_flash('error', 'Broadcast failed: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php");
+        exit();
+    }
+
+    // I. Clear All Platform Notifications
+    elseif ($action === 'admin_clear_all_notifications') {
+        try {
+            $pdo->exec("DELETE FROM notifications");
+            set_flash('success', 'All system notifications and campus announcements have been permanently cleared.');
+        } catch (PDOException $e) {
+            set_flash('error', 'Failed to clear notifications: ' . $e->getMessage());
+        }
+        header("Location: admin.php");
+        exit();
+    }
 }
 
 // =========================================================================
@@ -360,6 +427,7 @@ $totalSavingsOnSold = 0;
 $totalActiveValue = 0;
 $totalReports = 0;
 $pendingReports = 0;
+$totalNotifications = 0;
 $categoryCounts = [];
 
 try {
@@ -369,6 +437,7 @@ try {
     $totalSold = (int)$pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Sold'")->fetchColumn();
     $totalReports = (int)$pdo->query("SELECT COUNT(*) FROM reports")->fetchColumn();
     $pendingReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Pending'")->fetchColumn();
+    $totalNotifications = (int)$pdo->query("SELECT COUNT(*) FROM notifications")->fetchColumn();
     
     // Total money exchanged for items actually sold
     $totalMoneySold = (float)$pdo->query("SELECT COALESCE(SUM(selling_price), 0) FROM items WHERE status = 'Sold'")->fetchColumn();
@@ -460,12 +529,22 @@ require_once __DIR__ . '/includes/header.php';
             <h1 style="font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 0.25rem;">Administrator Command Center</h1>
             <p style="color: var(--text-secondary); font-size: 0.92rem; margin: 0;">Moderate campus listings, manage student accounts, and review marketplace cashflow</p>
         </div>
-        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center;">
+            <button type="button" class="btn btn-primary btn-sm" onclick="openModal('adminPushModal')">
+                📢 Push Notification
+            </button>
+            <form method="POST" action="admin.php" style="display: inline;" onsubmit="return confirm('⚠️ Are you sure you want to permanently clear ALL notifications and campus announcements across the entire platform?');">
+                <input type="hidden" name="action" value="admin_clear_all_notifications">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger);" title="Clear all active notifications">
+                    🗑️ Clear All Notifications (<?= $totalNotifications ?>)
+                </button>
+            </form>
             <a href="marketplace.php" class="btn btn-outline btn-sm">
                 🏪 Marketplace
             </a>
-            <a href="my_listings.php" class="btn btn-primary btn-sm">
-                ➕ Post Item as Admin
+            <a href="my_listings.php" class="btn btn-outline btn-sm">
+                ➕ Post Item
             </a>
         </div>
     </div>
@@ -966,15 +1045,19 @@ require_once __DIR__ . '/includes/header.php';
                                         <?php endif; ?>
 
                                         <!-- Action 3: Ignore Report -->
-                                        <?php if ($rep['status'] === 'Pending'): ?>
+                                        <?php if ($rep['status'] !== 'Ignored'): ?>
                                             <form method="POST" action="admin.php?tab=reports" style="display: inline;">
                                                 <input type="hidden" name="action" value="ignore_report">
                                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                                                 <input type="hidden" name="report_id" value="<?= (int)$rep['id'] ?>">
-                                                <button type="submit" class="btn btn-sm btn-outline" style="color: var(--text-muted); border-color: var(--border-color);" title="Dismiss report">
+                                                <button type="submit" class="btn btn-sm btn-outline" style="color: var(--text-muted); border-color: var(--border-color);" title="Dismiss and Ignore report">
                                                     👁️ Ignore
                                                 </button>
                                             </form>
+                                        <?php else: ?>
+                                            <span style="font-size: 0.75rem; color: var(--text-muted); padding: 4px 8px; border: 1px dashed var(--border-color); border-radius: var(--radius-sm);">
+                                                ✓ Ignored
+                                            </span>
                                         <?php endif; ?>
 
                                     </div>
@@ -1256,6 +1339,57 @@ function openNotifySellerModal(reportId, sellerId, sellerName, itemId, itemTitle
 
             <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.75rem;">
                 💾 Provision &amp; Activate Account
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Admin Push Notification Modal -->
+<div class="modal-overlay" id="adminPushModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">📢 Push Broadcast Notification</h2>
+            <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+        </div>
+
+        <form method="POST" action="admin.php" id="adminPushForm">
+            <input type="hidden" name="action" value="admin_push_broadcast">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+
+            <div style="background: var(--bg-surface); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                📣 <strong>Broadcast Reach:</strong> Send official notifications to all registered students (appears in notification bell &amp; studio) and/or broadcast live announcements to guests and campus visitors on the <strong>index.php</strong> homepage.
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Target Audience *</label>
+                <select name="target_audience" class="form-control" required>
+                    <option value="everyone">🌐 Everywhere (All Students + Guests on Homepage)</option>
+                    <option value="guests_index">🏠 Guests &amp; Visitors on Homepage (index.php)</option>
+                    <option value="all_users">👥 All Registered Students (In-App Bells &amp; Studio)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Notification Title / Headline *</label>
+                <input type="text" name="notice_title" class="form-control" placeholder="e.g. End of Semester Book Exchange Fair: Next Tuesday" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Notice Message *</label>
+                <textarea name="notice_message" class="form-control" rows="4" placeholder="Enter announcement details, date, location, or safety instructions..." required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Notice Style</label>
+                <select name="alert_type" class="form-control">
+                    <option value="info">🔵 Informational (Blue)</option>
+                    <option value="warning">🟠 Urgent / Notice (Orange)</option>
+                    <option value="success">🟢 Special Event / Good News (Green)</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.5rem;">
+                🚀 Broadcast Notification Now
             </button>
         </form>
     </div>

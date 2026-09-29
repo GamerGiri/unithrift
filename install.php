@@ -105,14 +105,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             ");
 
-            // 5. Create Notifications Table (Direct Student Alerts & Admin Notices)
+            // 5. Create Notifications Table (Direct Student Alerts & Campus Broadcasts)
             $rootPdo->exec("
                 CREATE TABLE IF NOT EXISTS `notifications` (
                     `id` INT AUTO_INCREMENT PRIMARY KEY,
-                    `user_id` INT NOT NULL,
+                    `user_id` INT DEFAULT NULL,
                     `item_id` INT DEFAULT NULL,
                     `title` VARCHAR(150) NOT NULL,
                     `message` TEXT NOT NULL,
+                    `target_audience` VARCHAR(30) DEFAULT 'user',
+                    `alert_type` VARCHAR(20) DEFAULT 'info',
                     `is_read` TINYINT(1) DEFAULT 0,
                     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,

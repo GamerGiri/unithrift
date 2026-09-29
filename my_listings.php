@@ -229,6 +229,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: my_listings.php#notifications");
         exit();
     }
+
+    elseif ($action === 'clear_user_notifications') {
+        try {
+            $stmt = $pdo->prepare("DELETE FROM notifications WHERE user_id = :uid");
+            $stmt->execute([':uid' => $userId]);
+            set_flash('info', 'Your notification alerts have been cleared.');
+        } catch (PDOException $e) {}
+        header("Location: my_listings.php");
+        exit();
+    }
 }
 
 // ==========================================
@@ -292,10 +302,18 @@ require_once __DIR__ . '/includes/header.php';
                         $hasUnread = false;
                         foreach ($userNotifications as $n) { if (!$n['is_read']) { $hasUnread = true; break; } }
                     ?>
-                    <?php if ($hasUnread): ?>
-                        <span class="badge" style="background: var(--danger); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: var(--radius-full);">NEW ALERTS</span>
-                    <?php endif; ?>
-                </div>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <?php if ($hasUnread): ?>
+                            <span class="badge" style="background: var(--danger); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: var(--radius-full);">NEW ALERTS</span>
+                        <?php endif; ?>
+                        <form method="POST" action="my_listings.php" style="margin: 0;" onsubmit="return confirm('Clear all notifications from your dashboard?');">
+                            <input type="hidden" name="action" value="clear_user_notifications">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                            <button type="submit" class="btn btn-outline btn-sm" style="font-size: 0.75rem; padding: 2px 8px;" title="Clear all alerts">
+                                🗑️ Clear All
+                            </button>
+                        </form>
+                    </div>
 
                 <div style="display: flex; flex-direction: column; gap: 0.75rem;">
                     <?php foreach ($userNotifications as $notif): ?>

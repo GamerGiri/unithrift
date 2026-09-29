@@ -33,11 +33,43 @@ try {
             LIMIT 6
         ");
         $featuredItems = $stmt->fetchAll();
+
+        // Fetch active campus broadcast / announcement for guests and all users
+        $annStmt = $pdo->query("
+            SELECT * FROM notifications 
+            WHERE (target_audience IN ('guests_index', 'everyone') OR user_id IS NULL)
+            ORDER BY id DESC 
+            LIMIT 1
+        ");
+        $activeAnnouncement = $annStmt->fetch(PDO::FETCH_ASSOC);
     }
 } catch (PDOException $e) {
     // Graceful fallback if database error
 }
 ?>
+
+<?php if (!empty($activeAnnouncement)): ?>
+    <div class="container" style="padding-top: 1.5rem; padding-bottom: 0;">
+        <div style="background: <?= $activeAnnouncement['alert_type'] === 'warning' ? 'var(--warning-light)' : ($activeAnnouncement['alert_type'] === 'success' ? 'var(--accent-light)' : 'var(--primary-light)') ?>; border: 1px solid <?= $activeAnnouncement['alert_type'] === 'warning' ? 'var(--warning)' : ($activeAnnouncement['alert_type'] === 'success' ? 'var(--accent)' : 'var(--primary)') ?>; border-radius: var(--radius-lg); padding: 1.15rem 1.5rem; box-shadow: var(--shadow-sm); display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap;">
+            <div style="display: flex; gap: 0.85rem; align-items: flex-start;">
+                <span style="font-size: 1.5rem; line-height: 1;">📢</span>
+                <div>
+                    <div style="font-weight: 800; font-size: 1rem; color: <?= $activeAnnouncement['alert_type'] === 'warning' ? 'var(--warning)' : ($activeAnnouncement['alert_type'] === 'success' ? '#065f46' : 'var(--primary)') ?>; margin-bottom: 0.25rem;">
+                        <?= htmlspecialchars($activeAnnouncement['title']) ?>
+                        <span style="font-size: 0.72rem; font-weight: 700; background: var(--bg-card); padding: 2px 7px; border-radius: var(--radius-full); margin-left: 6px; border: 1px solid var(--border-color); color: var(--text-muted); text-transform: uppercase;">Campus Broadcast</span>
+                    </div>
+                    <div style="font-size: 0.92rem; color: var(--text-primary); line-height: 1.45;">
+                        <?= nl2br(htmlspecialchars($activeAnnouncement['message'])) ?>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                        Posted by Campus Administration &bull; <?= date('M d, Y h:i A', strtotime($activeAnnouncement['created_at'])) ?>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="this.closest('.container').remove();" style="border: none; background: transparent; font-size: 1.25rem; line-height: 1; padding: 4px 8px; cursor: pointer;" title="Dismiss">&times;</button>
+        </div>
+    </div>
+<?php endif; ?>
 
 <!-- Hero Section -->
 <section class="hero">
