@@ -615,12 +615,16 @@ a:hover {
     font-weight: 600;
     cursor: pointer;
     transition: var(--transition);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
 }
 
 .filter-pill:hover,
 .filter-pill.active {
     background: var(--primary);
-    color: #ffffff;
+    color: #ffffff !important;
     border-color: var(--primary);
 }
 

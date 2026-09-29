@@ -107,7 +107,7 @@ try {
             <div class="stat-card">
                 <div class="stat-icon">💰</div>
                 <div class="stat-value"><?= APP_CURRENCY ?> <?= number_format($totalSavings) ?></div>
-                <div class="stat-label">Realized Savings (Sold Items)</div>
+                <div class="stat-label">Estimated Savings</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">👥</div>

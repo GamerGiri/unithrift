@@ -279,7 +279,7 @@ require_once __DIR__ . '/includes/header.php';
     <!-- Studio Header -->
     <div class="section-header" style="margin-bottom: 1.5rem;">
         <div>
-            <h1 class="section-title">My Seller Studio (CRUD Hub)</h1>
+            <h1 class="section-title">My Seller Studio</h1>
             <p class="section-desc">Manage your posted academic items, modify prices, update status, or post new gear</p>
         </div>
         <div>

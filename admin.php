@@ -12,10 +12,30 @@ $csrfToken = get_csrf_token();
 $activeTab = $_GET['tab'] ?? 'listings';
 $searchQuery = trim($_GET['q'] ?? '');
 
+// User Tab Filters & Search
+$userSearch = trim($_GET['user_search'] ?? '');
+if (empty($userSearch) && ($activeTab === 'users') && !empty($searchQuery)) {
+    $userSearch = $searchQuery;
+}
+$userType = trim($_GET['user_type'] ?? 'all'); // 'all', 'seu', 'outsiders', 'admins'
+if (!in_array($userType, ['all', 'seu', 'outsiders', 'admins'])) {
+    $userType = 'all';
+}
+
+// Report Tab Filters & Search
+$reportStatus = strtolower(trim($_GET['report_status'] ?? 'all')); // 'all', 'pending', 'reviewed', 'ignored', 'resolved'
+if (!in_array($reportStatus, ['all', 'pending', 'reviewed', 'ignored', 'resolved'])) {
+    $reportStatus = 'all';
+}
+$reportSearch = trim($_GET['report_search'] ?? '');
+if (empty($reportSearch) && ($activeTab === 'reports') && !empty($searchQuery)) {
+    $reportSearch = $searchQuery;
+}
+
 // =========================================================================
 // 1. POST Actions: Moderation, Status Updates, User Management
 // =========================================================================
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $action = $_POST['action'] ?? '';
     $token  = $_POST['csrf_token'] ?? '';
 
@@ -165,7 +185,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Failed to update user role: ' . $e->getMessage());
             }
         }
-        header("Location: admin.php?tab=users");
+        $userTypeParam = trim($_POST['user_type'] ?? '');
+        $userSearchParam = trim($_POST['user_search'] ?? '');
+        $uUrl = "admin.php?tab=users";
+        if (!empty($userTypeParam) && $userTypeParam !== 'all') $uUrl .= "&user_type=" . urlencode($userTypeParam);
+        if (!empty($userSearchParam)) $uUrl .= "&user_search=" . urlencode($userSearchParam);
+        header("Location: {$uUrl}");
         exit();
     }
 
@@ -184,7 +209,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Failed to delete user: ' . $e->getMessage());
             }
         }
-        header("Location: admin.php?tab=users");
+        $userTypeParam = trim($_POST['user_type'] ?? '');
+        $userSearchParam = trim($_POST['user_search'] ?? '');
+        $uUrl = "admin.php?tab=users";
+        if (!empty($userTypeParam) && $userTypeParam !== 'all') $uUrl .= "&user_type=" . urlencode($userTypeParam);
+        if (!empty($userSearchParam)) $uUrl .= "&user_search=" . urlencode($userSearchParam);
+        header("Location: {$uUrl}");
         exit();
     }
 
@@ -287,7 +317,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Action failed: ' . $e->getMessage());
             }
         }
-        header("Location: admin.php?tab=reports");
+        $repStatusParam = trim($_POST['redirect_status'] ?? '');
+        $repSearchParam = trim($_POST['redirect_search'] ?? '');
+        $rUrl = "admin.php?tab=reports";
+        if (!empty($repStatusParam) && $repStatusParam !== 'all') $rUrl .= "&report_status=" . urlencode($repStatusParam);
+        if (!empty($repSearchParam)) $rUrl .= "&report_search=" . urlencode($repSearchParam);
+        header("Location: {$rUrl}");
         exit();
     }
 
@@ -303,7 +338,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Action failed: ' . $e->getMessage());
             }
         }
-        header("Location: admin.php?tab=reports");
+        $repStatusParam = trim($_POST['redirect_status'] ?? '');
+        $repSearchParam = trim($_POST['redirect_search'] ?? '');
+        $rUrl = "admin.php?tab=reports";
+        if (!empty($repStatusParam) && $repStatusParam !== 'all') $rUrl .= "&report_status=" . urlencode($repStatusParam);
+        if (!empty($repSearchParam)) $rUrl .= "&report_search=" . urlencode($repSearchParam);
+        header("Location: {$rUrl}");
         exit();
     }
 
@@ -343,7 +383,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Failed to send notification: ' . $e->getMessage());
             }
         }
-        header("Location: admin.php?tab=reports");
+        $repStatusParam = trim($_POST['redirect_status'] ?? '');
+        $repSearchParam = trim($_POST['redirect_search'] ?? '');
+        $rUrl = "admin.php?tab=reports";
+        if (!empty($repStatusParam) && $repStatusParam !== 'all') $rUrl .= "&report_status=" . urlencode($repStatusParam);
+        if (!empty($repSearchParam)) $rUrl .= "&report_search=" . urlencode($repSearchParam);
+        header("Location: {$rUrl}");
         exit();
     }
 
@@ -419,24 +464,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 2. Fetch System Metrics & Analytics
 // =========================================================================
 $totalUsers = 0;
+$totalSeuStudents = 0;
+$totalOutsiders = 0;
+$totalAdminUsers = 0;
+
 $totalListings = 0;
 $totalAvailable = 0;
 $totalSold = 0;
 $totalMoneySold = 0;
 $totalSavingsOnSold = 0;
 $totalActiveValue = 0;
+
 $totalReports = 0;
 $pendingReports = 0;
+$reviewedReports = 0;
+$ignoredReports = 0;
+$resolvedReports = 0;
+
 $totalNotifications = 0;
 $categoryCounts = [];
 
 try {
     $totalUsers = (int)$pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
+    $totalSeuStudents = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role = 'student' AND (email LIKE '%@seu.edu.bd' OR email LIKE '%.seu.edu.bd')")->fetchColumn();
+    $totalOutsiders = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE email NOT LIKE '%@seu.edu.bd' AND email NOT LIKE '%.seu.edu.bd'")->fetchColumn();
+    $totalAdminUsers = (int)$pdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
+
     $totalListings = (int)$pdo->query("SELECT COUNT(*) FROM items")->fetchColumn();
     $totalAvailable = (int)$pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Available'")->fetchColumn();
     $totalSold = (int)$pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Sold'")->fetchColumn();
+    
     $totalReports = (int)$pdo->query("SELECT COUNT(*) FROM reports")->fetchColumn();
     $pendingReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Pending'")->fetchColumn();
+    $reviewedReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Reviewed'")->fetchColumn();
+    $ignoredReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Ignored'")->fetchColumn();
+    $resolvedReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Resolved'")->fetchColumn();
+    
     $totalNotifications = (int)$pdo->query("SELECT COUNT(*) FROM notifications")->fetchColumn();
     
     // Total money exchanged for items actually sold
@@ -489,16 +552,51 @@ try {
         }
         $allListings = $stmt->fetchAll();
     } elseif ($activeTab === 'users') {
-        $stmt = $pdo->query("
+        $userWhere = [];
+        $userParams = [];
+
+        if ($userType === 'outsiders') {
+            $userWhere[] = "(u.email NOT LIKE '%@seu.edu.bd' AND u.email NOT LIKE '%.seu.edu.bd')";
+        } elseif ($userType === 'admins') {
+            $userWhere[] = "u.role = 'admin'";
+        } elseif ($userType === 'seu') {
+            $userWhere[] = "((u.email LIKE '%@seu.edu.bd' OR u.email LIKE '%.seu.edu.bd') AND u.role = 'student')";
+        }
+
+        if (!empty($userSearch)) {
+            $userWhere[] = "(u.full_name LIKE :usearch OR u.student_id LIKE :usearch OR u.email LIKE :usearch OR u.phone LIKE :usearch OR u.department LIKE :usearch)";
+            $userParams[':usearch'] = "%{$userSearch}%";
+        }
+
+        $userWhereSql = !empty($userWhere) ? "WHERE " . implode(" AND ", $userWhere) : "";
+
+        $stmt = $pdo->prepare("
             SELECT u.*, COUNT(i.id) as item_count 
             FROM users u
             LEFT JOIN items i ON u.id = i.user_id
+            {$userWhereSql}
             GROUP BY u.id
             ORDER BY u.id DESC
         ");
+        $stmt->execute($userParams);
         $allUsers = $stmt->fetchAll();
     } elseif ($activeTab === 'reports') {
-        $stmt = $pdo->query("
+        $repWhere = [];
+        $repParams = [];
+
+        if (in_array($reportStatus, ['pending', 'reviewed', 'ignored', 'resolved'])) {
+            $repWhere[] = "r.status = :rstatus";
+            $repParams[':rstatus'] = ucfirst($reportStatus);
+        }
+
+        if (!empty($reportSearch)) {
+            $repWhere[] = "(i.title LIKE :rsearch OR seller.full_name LIKE :rsearch OR reporter.full_name LIKE :rsearch OR r.reason LIKE :rsearch OR r.details LIKE :rsearch OR seller.student_id LIKE :rsearch)";
+            $repParams[':rsearch'] = "%{$reportSearch}%";
+        }
+
+        $repWhereSql = !empty($repWhere) ? "WHERE " . implode(" AND ", $repWhere) : "";
+
+        $stmt = $pdo->prepare("
             SELECT r.*, 
                    i.title as item_title, i.selling_price as item_price, i.status as item_status, i.image_url as item_image, i.image_icon as item_icon,
                    seller.id as seller_id, seller.full_name as seller_name, seller.email as seller_email, seller.phone as seller_phone, seller.student_id as seller_sid, seller.department as seller_dept,
@@ -507,8 +605,10 @@ try {
             LEFT JOIN items i ON r.item_id = i.id
             LEFT JOIN users seller ON i.user_id = seller.id
             LEFT JOIN users reporter ON r.reporter_id = reporter.id
+            {$repWhereSql}
             ORDER BY r.id DESC
         ");
+        $stmt->execute($repParams);
         $allReports = $stmt->fetchAll();
     }
 } catch (PDOException $e) {
@@ -733,12 +833,78 @@ require_once __DIR__ . '/includes/header.php';
         
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
             <div>
-                <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.25rem;">Registered Students &amp; Administrators (<?= count($allUsers) ?>)</h2>
-                <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0;">Public student signup requires @seu.edu.bd. Administrators have privilege to provision verified accounts with any email address (e.g. Gmail, external researchers).</p>
+                <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.25rem;">
+                    Student Accounts &amp; Users (<?= count($allUsers) ?>)
+                </h2>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0;">
+                    Search and inspect registered SEU students, external non-SEU outsiders, and system administrators.
+                </p>
             </div>
             <button type="button" class="btn btn-primary btn-sm" onclick="openModal('adminAddUserModal')">
                 ➕ Add User (Any Email)
             </button>
+        </div>
+
+        <!-- Filter & Search Controls for Student Accounts -->
+        <div style="background: var(--bg-surface); padding: 1.15rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.9rem;">
+            
+            <!-- Row 1: Segmented Filter Pills -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div class="filter-pills">
+                    <a href="admin.php?tab=users&user_type=all<?= !empty($userSearch) ? '&user_search=' . urlencode($userSearch) : '' ?>" 
+                       class="filter-pill <?= $userType === 'all' ? 'active' : '' ?>">
+                        👥 All Accounts (<?= $totalUsers ?>)
+                    </a>
+                    <a href="admin.php?tab=users&user_type=seu<?= !empty($userSearch) ? '&user_search=' . urlencode($userSearch) : '' ?>" 
+                       class="filter-pill <?= $userType === 'seu' ? 'active' : '' ?>">
+                        🎓 SEU Students (<?= $totalSeuStudents ?>)
+                    </a>
+                    <a href="admin.php?tab=users&user_type=outsiders<?= !empty($userSearch) ? '&user_search=' . urlencode($userSearch) : '' ?>" 
+                       class="filter-pill <?= $userType === 'outsiders' ? 'active' : '' ?>">
+                        🌐 Outsiders / Non-SEU (<?= $totalOutsiders ?>)
+                    </a>
+                    <a href="admin.php?tab=users&user_type=admins<?= !empty($userSearch) ? '&user_search=' . urlencode($userSearch) : '' ?>" 
+                       class="filter-pill <?= $userType === 'admins' ? 'active' : '' ?>">
+                        🛡️ Administrators (<?= $totalAdminUsers ?>)
+                    </a>
+                </div>
+
+                <?php if (!empty($userSearch) || $userType !== 'all'): ?>
+                    <a href="admin.php?tab=users" class="btn btn-outline btn-sm" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                        ↺ Reset Filters
+                    </a>
+                <?php endif; ?>
+            </div>
+
+            <!-- Row 2: Live Search Input Form -->
+            <form method="GET" action="admin.php" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <input type="hidden" name="tab" value="users">
+                <input type="hidden" name="user_type" value="<?= htmlspecialchars($userType) ?>">
+                <div style="flex: 1; min-width: 260px;">
+                    <input type="text" name="user_search" class="form-control" placeholder="Search by student ID, name, email address, phone, or department..." value="<?= htmlspecialchars($userSearch) ?>">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
+                    🔍 Search
+                </button>
+                <?php if (!empty($userSearch)): ?>
+                    <a href="admin.php?tab=users&user_type=<?= htmlspecialchars($userType) ?>" class="btn btn-outline btn-sm" style="white-space: nowrap;">
+                        Clear
+                    </a>
+                <?php endif; ?>
+            </form>
+
+            <?php if (!empty($userSearch) || $userType !== 'all'): ?>
+                <div style="font-size: 0.82rem; color: var(--text-muted);">
+                    Showing <strong><?= count($allUsers) ?></strong> matching account<?= count($allUsers) === 1 ? '' : 's' ?> 
+                    <?php if ($userType !== 'all'): ?>
+                        in <strong><?= $userType === 'outsiders' ? 'Outsiders (Non-SEU)' : ($userType === 'admins' ? 'Administrators' : 'SEU Students') ?></strong>
+                    <?php endif; ?>
+                    <?php if (!empty($userSearch)): ?>
+                        for search &ldquo;<em><?= htmlspecialchars($userSearch) ?></em>&rdquo;
+                    <?php endif; ?>.
+                </div>
+            <?php endif; ?>
+
         </div>
 
         <div class="table-responsive">
@@ -747,6 +913,7 @@ require_once __DIR__ . '/includes/header.php';
                     <tr>
                         <th>Student ID</th>
                         <th>Student Name &amp; Dept</th>
+                        <th>Account Type</th>
                         <th>Email Address</th>
                         <th>Mobile / WhatsApp</th>
                         <th>Listings</th>
@@ -756,76 +923,106 @@ require_once __DIR__ . '/includes/header.php';
                     </tr>
                 </thead>
                 <tbody>
-                    <?php foreach ($allUsers as $u): ?>
+                    <?php if (empty($allUsers)): ?>
                         <tr>
-                            <td data-label="Student ID">
-                                <strong><?= htmlspecialchars($u['student_id']) ?></strong>
-                            </td>
-                            <td data-label="Name &amp; Dept">
-                                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                    <div class="user-avatar-sm" style="width: 28px; height: 28px; font-size: 0.75rem;">
-                                        <?= strtoupper(substr($u['full_name'], 0, 1)) ?>
-                                    </div>
-                                    <div>
-                                        <div style="font-weight: 700;"><?= htmlspecialchars($u['full_name']) ?></div>
-                                        <div style="font-size: 0.78rem; color: var(--text-muted);"><?= htmlspecialchars($u['department']) ?></div>
-                                    </div>
+                            <td colspan="9" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+                                <strong>No accounts found matching your filter criteria.</strong>
+                                <div style="font-size: 0.85rem; margin-top: 4px;">Try searching for another keyword or switch category pill.</div>
+                                <div style="margin-top: 1rem;">
+                                    <a href="admin.php?tab=users" class="btn btn-outline btn-sm">View All Accounts</a>
                                 </div>
                             </td>
-                            <td data-label="Email">
-                                <a href="mailto:<?= htmlspecialchars($u['email']) ?>"><?= htmlspecialchars($u['email']) ?></a>
-                                <?php 
-                                    $uEmailLower = strtolower($u['email']);
-                                    $isSeu = str_ends_with($uEmailLower, '@seu.edu.bd') || str_ends_with($uEmailLower, '.seu.edu.bd');
-                                ?>
-                                <?php if (!$isSeu): ?>
-                                    <span style="display: inline-block; background: var(--accent-light); color: var(--accent); font-size: 0.68rem; padding: 1px 6px; border-radius: var(--radius-full); margin-left: 4px; font-weight: 800;" title="Provisioned by Admin outside @seu.edu.bd">NON-SEU</span>
-                                <?php endif; ?>
-                            </td>
-                            <td data-label="Mobile / WhatsApp">
-                                <strong><?= htmlspecialchars($u['phone']) ?></strong>
-                            </td>
-                            <td data-label="Listings">
-                                <span style="background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); font-size: 0.82rem; font-weight: 700;">
-                                    <?= (int)$u['item_count'] ?> items
-                                </span>
-                            </td>
-                            <td data-label="Current Role">
-                                <?php if ($u['id'] == $_SESSION['user_id']): ?>
-                                    <span style="font-size: 0.8rem; background: var(--warning); color: #000; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 800;">
-                                        ADMIN (You)
-                                    </span>
-                                <?php else: ?>
-                                    <form method="POST" action="admin.php?tab=users" style="display: inline-block;">
-                                        <input type="hidden" name="action" value="toggle_user_role">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                                        <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                                        <select name="role" onchange="this.form.submit()" class="custom-select" style="font-size: 0.78rem; padding: 2px 6px;">
-                                            <option value="student" <?= $u['role'] === 'student' ? 'selected' : '' ?>>Student</option>
-                                            <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                        </select>
-                                    </form>
-                                <?php endif; ?>
-                            </td>
-                            <td data-label="Joined Date" style="font-size: 0.8rem; color: var(--text-muted);">
-                                <?= date('M d, Y', strtotime($u['created_at'])) ?>
-                            </td>
-                            <td data-label="Actions" style="text-align: right;">
-                                <?php if ($u['id'] != $_SESSION['user_id']): ?>
-                                    <form method="POST" action="admin.php?tab=users" onsubmit="return confirm('Delete user <?= htmlspecialchars(addslashes($u['full_name'])) ?>? This will delete all items posted by this student.');" style="display: inline-block;">
-                                        <input type="hidden" name="action" value="admin_delete_user">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                                        <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
-                                        <button type="submit" class="btn btn-danger btn-sm">
-                                            🗑️ Remove User
-                                        </button>
-                                    </form>
-                                <?php else: ?>
-                                    <span style="color: var(--text-muted); font-size: 0.8rem;">Active Session</span>
-                                <?php endif; ?>
-                            </td>
                         </tr>
-                    <?php endforeach; ?>
+                    <?php else: ?>
+                        <?php foreach ($allUsers as $u): ?>
+                            <?php 
+                                $uEmailLower = strtolower($u['email']);
+                                $isSeu = str_ends_with($uEmailLower, '@seu.edu.bd') || str_ends_with($uEmailLower, '.seu.edu.bd');
+                                $isAdmin = ($u['role'] === 'admin');
+                            ?>
+                            <tr>
+                                <td data-label="Student ID">
+                                    <strong><?= htmlspecialchars($u['student_id']) ?></strong>
+                                </td>
+                                <td data-label="Name &amp; Dept">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <div class="user-avatar-sm" style="width: 28px; height: 28px; font-size: 0.75rem;">
+                                            <?= strtoupper(substr($u['full_name'], 0, 1)) ?>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 700;"><?= htmlspecialchars($u['full_name']) ?></div>
+                                            <div style="font-size: 0.78rem; color: var(--text-muted);"><?= htmlspecialchars($u['department']) ?></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td data-label="Account Type">
+                                    <?php if ($isAdmin): ?>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.35); font-size: 0.72rem; padding: 2px 8px; border-radius: var(--radius-full); font-weight: 800;">
+                                            🛡️ Admin
+                                        </span>
+                                    <?php elseif (!$isSeu): ?>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(234, 88, 12, 0.12); color: #ea580c; border: 1px solid rgba(234, 88, 12, 0.35); font-size: 0.72rem; padding: 2px 8px; border-radius: var(--radius-full); font-weight: 800;" title="External email authorized by Administrator">
+                                            🌐 Outsider
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="display: inline-flex; align-items: center; gap: 4px; background: rgba(59, 130, 246, 0.12); color: var(--primary); border: 1px solid rgba(59, 130, 246, 0.3); font-size: 0.72rem; padding: 2px 8px; border-radius: var(--radius-full); font-weight: 800;">
+                                            🎓 SEU Student
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Email">
+                                    <a href="mailto:<?= htmlspecialchars($u['email']) ?>"><?= htmlspecialchars($u['email']) ?></a>
+                                </td>
+                                <td data-label="Mobile / WhatsApp">
+                                    <strong><?= htmlspecialchars($u['phone']) ?></strong>
+                                </td>
+                                <td data-label="Listings">
+                                    <span style="background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); font-size: 0.82rem; font-weight: 700;">
+                                        <?= (int)$u['item_count'] ?> items
+                                    </span>
+                                </td>
+                                <td data-label="Current Role">
+                                    <?php if ($u['id'] == $_SESSION['user_id']): ?>
+                                        <span style="font-size: 0.8rem; background: var(--warning); color: #000; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 800;">
+                                            ADMIN (You)
+                                        </span>
+                                    <?php else: ?>
+                                        <form method="POST" action="admin.php?tab=users" style="display: inline-block;">
+                                            <input type="hidden" name="action" value="toggle_user_role">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                            <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                                            <input type="hidden" name="user_type" value="<?= htmlspecialchars($userType) ?>">
+                                            <input type="hidden" name="user_search" value="<?= htmlspecialchars($userSearch) ?>">
+                                            <select name="role" onchange="this.form.submit()" class="custom-select" style="font-size: 0.78rem; padding: 2px 6px;">
+                                                <option value="student" <?= $u['role'] === 'student' ? 'selected' : '' ?>>Student</option>
+                                                <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>Admin</option>
+                                            </select>
+                                        </form>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Joined Date" style="font-size: 0.8rem; color: var(--text-muted);">
+                                    <?= date('M d, Y', strtotime($u['created_at'])) ?>
+                                </td>
+                                <td data-label="Actions" style="text-align: right;">
+                                    <?php if ($u['id'] != $_SESSION['user_id']): ?>
+                                        <form method="POST" action="admin.php?tab=users" onsubmit="return confirm('Delete user <?= htmlspecialchars(addslashes($u['full_name'])) ?>? This will delete all items posted by this student.');" style="display: inline-block;">
+                                            <input type="hidden" name="action" value="admin_delete_user">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                            <input type="hidden" name="user_id" value="<?= (int)$u['id'] ?>">
+                                            <input type="hidden" name="user_type" value="<?= htmlspecialchars($userType) ?>">
+                                            <input type="hidden" name="user_search" value="<?= htmlspecialchars($userSearch) ?>">
+                                            <button type="submit" class="btn btn-danger btn-sm">
+                                                🗑️ Remove User
+                                            </button>
+                                        </form>
+                                    <?php else: ?>
+                                        <span style="color: var(--text-muted); font-size: 0.8rem;">Active Session</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -889,10 +1086,10 @@ require_once __DIR__ . '/includes/header.php';
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
             <div>
                 <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.25rem;">Campus Safety &amp; Listing Reports (<?= count($allReports) ?>)</h2>
-                <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0;">Review flagged listings, take moderation actions, dismiss invalid claims, or warn student sellers directly.</p>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0;">Review flagged listings separately by Pending, Reviewed, and Ignored status, dismiss invalid claims, or warn student sellers directly.</p>
             </div>
             
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                 <span class="badge" style="background: var(--warning-light); color: var(--warning); padding: 5px 12px; font-size: 0.85rem; font-weight: 700; border-radius: var(--radius-full);">
                     ⏳ <?= $pendingReports ?> Pending Review
                 </span>
@@ -900,6 +1097,72 @@ require_once __DIR__ . '/includes/header.php';
                     Total: <?= $totalReports ?>
                 </span>
             </div>
+        </div>
+
+        <!-- Filter & Search Controls for Safety Reports -->
+        <div style="background: var(--bg-surface); padding: 1.15rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.9rem;">
+            
+            <!-- Row 1: Separate Status Pills -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div class="filter-pills">
+                    <a href="admin.php?tab=reports&report_status=all<?= !empty($reportSearch) ? '&report_search=' . urlencode($reportSearch) : '' ?>" 
+                       class="filter-pill <?= $reportStatus === 'all' ? 'active' : '' ?>">
+                        📋 All Reports (<?= $totalReports ?>)
+                    </a>
+                    <a href="admin.php?tab=reports&report_status=pending<?= !empty($reportSearch) ? '&report_search=' . urlencode($reportSearch) : '' ?>" 
+                       class="filter-pill <?= $reportStatus === 'pending' ? 'active' : '' ?>" style="<?= $pendingReports > 0 ? 'font-weight: 800;' : '' ?>">
+                        ⏳ Pending (<?= $pendingReports ?>)
+                    </a>
+                    <a href="admin.php?tab=reports&report_status=reviewed<?= !empty($reportSearch) ? '&report_search=' . urlencode($reportSearch) : '' ?>" 
+                       class="filter-pill <?= $reportStatus === 'reviewed' ? 'active' : '' ?>">
+                        👀 Reviewed (<?= $reviewedReports ?>)
+                    </a>
+                    <a href="admin.php?tab=reports&report_status=ignored<?= !empty($reportSearch) ? '&report_search=' . urlencode($reportSearch) : '' ?>" 
+                       class="filter-pill <?= $reportStatus === 'ignored' ? 'active' : '' ?>">
+                        ✓ Ignored (<?= $ignoredReports ?>)
+                    </a>
+                    <a href="admin.php?tab=reports&report_status=resolved<?= !empty($reportSearch) ? '&report_search=' . urlencode($reportSearch) : '' ?>" 
+                       class="filter-pill <?= $reportStatus === 'resolved' ? 'active' : '' ?>">
+                        🗑️ Resolved (<?= $resolvedReports ?>)
+                    </a>
+                </div>
+
+                <?php if (!empty($reportSearch) || $reportStatus !== 'all'): ?>
+                    <a href="admin.php?tab=reports" class="btn btn-outline btn-sm" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                        ↺ Reset Filters
+                    </a>
+                <?php endif; ?>
+            </div>
+
+            <!-- Row 2: Live Search Form -->
+            <form method="GET" action="admin.php" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <input type="hidden" name="tab" value="reports">
+                <input type="hidden" name="report_status" value="<?= htmlspecialchars($reportStatus) ?>">
+                <div style="flex: 1; min-width: 260px;">
+                    <input type="text" name="report_search" class="form-control" placeholder="Search reported listing title, seller name, reporter, or reason..." value="<?= htmlspecialchars($reportSearch) ?>">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
+                    🔍 Search Reports
+                </button>
+                <?php if (!empty($reportSearch)): ?>
+                    <a href="admin.php?tab=reports&report_status=<?= htmlspecialchars($reportStatus) ?>" class="btn btn-outline btn-sm" style="white-space: nowrap;">
+                        Clear
+                    </a>
+                <?php endif; ?>
+            </form>
+
+            <?php if (!empty($reportSearch) || $reportStatus !== 'all'): ?>
+                <div style="font-size: 0.82rem; color: var(--text-muted);">
+                    Showing <strong><?= count($allReports) ?></strong> report<?= count($allReports) === 1 ? '' : 's' ?> 
+                    <?php if ($reportStatus !== 'all'): ?>
+                        filtered by status <strong><?= ucfirst($reportStatus) ?></strong>
+                    <?php endif; ?>
+                    <?php if (!empty($reportSearch)): ?>
+                        for keyword &ldquo;<em><?= htmlspecialchars($reportSearch) ?></em>&rdquo;
+                    <?php endif; ?>.
+                </div>
+            <?php endif; ?>
+
         </div>
 
         <div class="table-responsive">
@@ -919,9 +1182,30 @@ require_once __DIR__ . '/includes/header.php';
                     <?php if (empty($allReports)): ?>
                         <tr>
                             <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-muted);">
-                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
-                                <strong>No safety reports on file!</strong>
-                                <div style="font-size: 0.85rem; margin-top: 4px;">Campus listings are currently clean and compliant.</div>
+                                <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">
+                                    <?= $reportStatus === 'pending' ? '🎉' : ($reportStatus === 'ignored' ? '👁️' : ($reportStatus === 'reviewed' ? '👀' : '📋')) ?>
+                                </div>
+                                <strong>
+                                    <?php if ($reportStatus === 'pending'): ?>
+                                        All caught up! No pending reports awaiting moderation.
+                                    <?php elseif ($reportStatus === 'reviewed'): ?>
+                                        No reviewed reports on file.
+                                    <?php elseif ($reportStatus === 'ignored'): ?>
+                                        No ignored reports on file.
+                                    <?php elseif ($reportStatus === 'resolved'): ?>
+                                        No resolved reports on file.
+                                    <?php else: ?>
+                                        No safety reports found matching your criteria.
+                                    <?php endif; ?>
+                                </strong>
+                                <div style="font-size: 0.85rem; margin-top: 4px;">
+                                    <?= !empty($reportSearch) ? 'Try searching with another keyword or reset the filter.' : 'Campus marketplace listings are currently clean and compliant.' ?>
+                                </div>
+                                <?php if (!empty($reportSearch) || $reportStatus !== 'all'): ?>
+                                    <div style="margin-top: 1rem;">
+                                        <a href="admin.php?tab=reports" class="btn btn-outline btn-sm">View All Reports</a>
+                                    </div>
+                                <?php endif; ?>
                             </td>
                         </tr>
                     <?php else: ?>
@@ -1038,6 +1322,8 @@ require_once __DIR__ . '/includes/header.php';
                                                 <input type="hidden" name="report_id" value="<?= (int)$rep['id'] ?>">
                                                 <input type="hidden" name="item_id" value="<?= (int)$rep['item_id'] ?>">
                                                 <input type="hidden" name="seller_id" value="<?= (int)($rep['seller_id'] ?? 0) ?>">
+                                                <input type="hidden" name="redirect_status" value="<?= htmlspecialchars($reportStatus) ?>">
+                                                <input type="hidden" name="redirect_search" value="<?= htmlspecialchars($reportSearch) ?>">
                                                 <button type="submit" class="btn btn-sm btn-outline" style="color: var(--danger); border-color: var(--danger);" title="Remove listing permanently">
                                                     🗑️ Remove
                                                 </button>
@@ -1050,6 +1336,8 @@ require_once __DIR__ . '/includes/header.php';
                                                 <input type="hidden" name="action" value="ignore_report">
                                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                                                 <input type="hidden" name="report_id" value="<?= (int)$rep['id'] ?>">
+                                                <input type="hidden" name="redirect_status" value="<?= htmlspecialchars($reportStatus) ?>">
+                                                <input type="hidden" name="redirect_search" value="<?= htmlspecialchars($reportSearch) ?>">
                                                 <button type="submit" class="btn btn-sm btn-outline" style="color: var(--text-muted); border-color: var(--border-color);" title="Dismiss and Ignore report">
                                                     👁️ Ignore
                                                 </button>
@@ -1243,6 +1531,8 @@ function openNotifySellerModal(reportId, sellerId, sellerName, itemId, itemTitle
             <input type="hidden" name="report_id" id="notifyReportId" value="0">
             <input type="hidden" name="seller_id" id="notifySellerId" value="0">
             <input type="hidden" name="item_id" id="notifyItemId" value="0">
+            <input type="hidden" name="redirect_status" value="<?= htmlspecialchars($reportStatus) ?>">
+            <input type="hidden" name="redirect_search" value="<?= htmlspecialchars($reportSearch) ?>">
 
             <div style="background: var(--bg-surface); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem; font-size: 0.88rem;">
                 <div><strong>Recipient:</strong> <span id="notifySellerName">-</span></div>
