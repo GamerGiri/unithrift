@@ -552,15 +552,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         <span>Database Connection &amp; Creation</span>
                     </div>
 
-                    <div class="hosting-tip">
-                        <strong>💡 Live Hosting / InfinityFree / cPanel Tip:</strong><br>
-                        Find your MySQL credentials in your hosting Control Panel under <strong>MySQL Databases</strong>:
-                        <ul style="margin: 0.35rem 0 0 1.25rem; padding: 0;">
-                            <li><strong>Host:</strong> e.g. <code>sql300.infinityfree.com</code> (or <code>127.0.0.1</code> for local XAMPP)</li>
-                            <li><strong>Username:</strong> e.g. <code>if0_38xxxxxx</code> (or <code>root</code> for local XAMPP)</li>
-                            <li><strong>Database Name:</strong> e.g. <code>if0_38xxxxxx_unithrift</code> (or <code>unithrift_db</code> for local)</li>
-                        </ul>
-                    </div>
+                   
 
                     <div class="form-row">
                         <div class="form-group" style="flex: 2;">
