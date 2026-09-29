@@ -58,6 +58,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    // B2. Admin Edit Listing (Full Moderation Update)
+    elseif ($action === 'admin_update_item') {
+        $itemId         = (int)($_POST['item_id'] ?? 0);
+        $title          = trim($_POST['title'] ?? '');
+        $category       = trim($_POST['category'] ?? 'Textbooks');
+        $courseCode     = strtoupper(trim($_POST['course_code'] ?? ''));
+        $condition      = trim($_POST['item_condition'] ?? 'Gently Used');
+        $origPrice      = (float)($_POST['original_price'] ?? 0);
+        $sellPrice      = (float)($_POST['selling_price'] ?? 0);
+        $description    = trim($_POST['description'] ?? '');
+        $meetupLocation = trim($_POST['meetup_location'] ?? 'SEU Main Cafeteria');
+        $status         = trim($_POST['status'] ?? 'Available');
+        $icon           = trim($_POST['image_icon'] ?? '📦');
+        $newImageUrl    = save_item_image($_FILES['item_image'] ?? null);
+
+        if (empty($title) || empty($description) || empty($meetupLocation) || $itemId <= 0) {
+            set_flash('error', 'Invalid input data for update.');
+        } elseif ($sellPrice <= 0) {
+            set_flash('error', 'Selling price must be greater than zero.');
+        } else {
+            try {
+                if ($newImageUrl) {
+                    $stmt = $pdo->prepare("
+                        UPDATE items SET 
+                            title = :title,
+                            category = :category,
+                            course_code = :course,
+                            item_condition = :condition,
+                            original_price = :orig,
+                            selling_price = :sell,
+                            description = :desc,
+                            meetup_location = :meetup,
+                            status = :status,
+                            image_icon = :icon,
+                            image_url = :img
+                        WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':title'     => $title,
+                        ':category'  => $category,
+                        ':course'    => $courseCode ?: null,
+                        ':condition' => $condition,
+                        ':orig'      => ($origPrice > 0 ? $origPrice : $sellPrice),
+                        ':sell'      => $sellPrice,
+                        ':desc'      => $description,
+                        ':meetup'    => $meetupLocation,
+                        ':status'    => $status,
+                        ':icon'      => $icon,
+                        ':img'       => $newImageUrl,
+                        ':id'        => $itemId
+                    ]);
+                } else {
+                    $stmt = $pdo->prepare("
+                        UPDATE items SET 
+                            title = :title,
+                            category = :category,
+                            course_code = :course,
+                            item_condition = :condition,
+                            original_price = :orig,
+                            selling_price = :sell,
+                            description = :desc,
+                            meetup_location = :meetup,
+                            status = :status,
+                            image_icon = :icon
+                        WHERE id = :id
+                    ");
+                    $stmt->execute([
+                        ':title'     => $title,
+                        ':category'  => $category,
+                        ':course'    => $courseCode ?: null,
+                        ':condition' => $condition,
+                        ':orig'      => ($origPrice > 0 ? $origPrice : $sellPrice),
+                        ':sell'      => $sellPrice,
+                        ':desc'      => $description,
+                        ':meetup'    => $meetupLocation,
+                        ':status'    => $status,
+                        ':icon'      => $icon,
+                        ':id'        => $itemId
+                    ]);
+                }
+
+                set_flash('success', "Listing #{$itemId} successfully updated by Administrator.");
+            } catch (PDOException $e) {
+                set_flash('error', 'Admin update failed: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php?tab=listings");
+        exit();
+    }
+
     // C. Admin Toggle User Role (Student <-> Admin)
     elseif ($action === 'toggle_user_role') {
         $targetUserId = (int)($_POST['user_id'] ?? 0);
@@ -353,14 +443,19 @@ require_once __DIR__ . '/includes/header.php';
                                     <?= date('M d, Y', strtotime($item['created_at'])) ?>
                                 </td>
                                 <td data-label="Actions" style="text-align: right;">
-                                    <form method="POST" action="admin.php" onsubmit="return confirm('Are you sure you want to permanently delete this listing from the marketplace as administrator?');" style="display: inline-block;">
-                                        <input type="hidden" name="action" value="admin_delete_item">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                                        <input type="hidden" name="item_id" value="<?= (int)$item['id'] ?>">
-                                        <button type="submit" class="btn btn-danger btn-sm" title="Remove Prohibited/Spam Listing">
-                                            🗑️ Remove
+                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
+                                        <button type="button" class="btn btn-outline btn-sm" onclick='openAdminEditModal(<?= json_encode($item, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
+                                            ✏️ Edit
                                         </button>
-                                    </form>
+                                        <form method="POST" action="admin.php" onsubmit="return confirm('Are you sure you want to permanently delete this listing from the marketplace as administrator?');" style="display: inline-block;">
+                                            <input type="hidden" name="action" value="admin_delete_item">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                            <input type="hidden" name="item_id" value="<?= (int)$item['id'] ?>">
+                                            <button type="submit" class="btn btn-danger btn-sm" title="Remove Prohibited/Spam Listing">
+                                                🗑️ Remove
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                         <?php endforeach; ?>
@@ -514,5 +609,149 @@ require_once __DIR__ . '/includes/header.php';
     <?php endif; ?>
 
 </div>
+
+<!-- Admin Edit Listing Modal -->
+<div class="modal-overlay" id="adminEditModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">✏️ Admin Edit Listing</h2>
+            <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+        </div>
+
+        <form method="POST" action="admin.php?tab=listings" id="adminEditForm" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="admin_update_item">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+            <input type="hidden" name="item_id" id="adminEditItemId" value="">
+
+            <div class="form-group">
+                <label class="form-label">Item Title *</label>
+                <input type="text" name="title" id="adminEditTitle" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Product Photo (Optional, leave empty to keep current)</label>
+                <div id="adminEditImagePreview" style="margin-bottom: 0.5rem; display: none;"></div>
+                <input type="file" name="item_image" class="form-control" accept="image/jpeg,image/png,image/webp">
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Category *</label>
+                    <select name="category" id="adminEditCategory" class="form-control" required>
+                        <option value="Textbooks">📚 Textbooks</option>
+                        <option value="Lab Gear & Kits">🔬 Lab Gear &amp; Kits</option>
+                        <option value="Drawing & Tools">📐 Drawing &amp; Tools</option>
+                        <option value="Electronics & Calculators">🔢 Electronics &amp; Calculators</option>
+                        <option value="Other">📦 Other Academic Supplies</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Course Code</label>
+                    <input type="text" name="course_code" id="adminEditCourseCode" class="form-control">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Condition *</label>
+                    <select name="item_condition" id="adminEditCondition" class="form-control" required>
+                        <option value="Like New">Like New</option>
+                        <option value="Gently Used">Gently Used</option>
+                        <option value="Fair">Fair</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Status *</label>
+                    <select name="status" id="adminEditStatus" class="form-control" required>
+                        <option value="Available">Available</option>
+                        <option value="Reserved">Reserved</option>
+                        <option value="Sold">Sold</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Display Icon</label>
+                    <select name="image_icon" id="adminEditIcon" class="form-control">
+                        <option value="📚">📚 Textbook / Notes</option>
+                        <option value="🔬">🔬 Lab Equipment</option>
+                        <option value="🔢">🔢 Calculator / Hardware</option>
+                        <option value="📐">📐 Drawing / Architecture</option>
+                        <option value="⚡">⚡ Circuit / Electronics</option>
+                        <option value="💻">💻 Computer / Adapter</option>
+                        <option value="💡">💡 IC / Components</option>
+                        <option value="📦">📦 General Academic Gear</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Campus Meetup Location *</label>
+                    <input type="text" name="meetup_location" id="adminEditMeetup" class="form-control" required>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Original Retail Price (BDT) *</label>
+                    <input type="number" step="1" name="original_price" id="adminEditOrigPrice" class="form-control calc-orig-price" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Resale Price (BDT) *</label>
+                    <input type="number" step="1" name="selling_price" id="adminEditSellPrice" class="form-control calc-sell-price" required>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+                <span class="calc-discount-badge" style="display: none; padding: 4px 10px; border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 700; background: var(--accent-light); color: var(--accent);"></span>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description *</label>
+                <textarea name="description" id="adminEditDesc" class="form-control" rows="3" required></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.5rem;">
+                💾 Save Administrative Changes
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+function openAdminEditModal(item) {
+    document.getElementById('adminEditItemId').value = item.id;
+    document.getElementById('adminEditTitle').value = item.title;
+    document.getElementById('adminEditCategory').value = item.category;
+    document.getElementById('adminEditCourseCode').value = item.course_code || '';
+    document.getElementById('adminEditCondition').value = item.item_condition;
+    document.getElementById('adminEditStatus').value = item.status;
+    document.getElementById('adminEditIcon').value = item.image_icon || '📦';
+    document.getElementById('adminEditMeetup').value = item.meetup_location;
+    document.getElementById('adminEditOrigPrice').value = item.original_price;
+    document.getElementById('adminEditSellPrice').value = item.selling_price;
+    document.getElementById('adminEditDesc').value = item.description;
+
+    const previewContainer = document.getElementById('adminEditImagePreview');
+    if (item.image_url) {
+        previewContainer.innerHTML = `<div style="display: flex; align-items: center; gap: 0.75rem;"><img src="${item.image_url}" alt="Current Photo" style="width: 50px; height: 50px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); object-fit: cover;"> <span style="font-size: 0.8rem; color: var(--text-muted);">Current attached photo</span></div>`;
+        previewContainer.style.display = 'block';
+    } else {
+        previewContainer.innerHTML = '';
+        previewContainer.style.display = 'none';
+    }
+
+    // Trigger price calculator badge
+    const editForm = document.getElementById('adminEditForm');
+    const orig = editForm.querySelector('.calc-orig-price');
+    if (orig) {
+        orig.dispatchEvent(new Event('input'));
+    }
+
+    openModal('adminEditModal');
+}
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

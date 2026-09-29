@@ -78,6 +78,33 @@ function get_item_image(?string $imageUrl): ?string {
     return null;
 }
 
+function save_item_image(?array $file): ?string {
+    if (!$file || empty($file['tmp_name']) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return null;
+    }
+    $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    $fileInfo = @getimagesize($file['tmp_name']);
+    if (!$fileInfo || !in_array($fileInfo['mime'], $allowedMimes)) {
+        return null;
+    }
+    if ($file['size'] > 5 * 1024 * 1024) { // Max 5MB
+        return null;
+    }
+    $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $ext = strtolower($ext) ?: 'jpg';
+    if ($ext === 'jpeg') $ext = 'jpg';
+
+    $uploadDir = __DIR__ . '/../assets/uploads/';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+    $filename = 'item_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    if (move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
+        return 'assets/uploads/' . $filename;
+    }
+    return null;
+}
+
 // Generate or get CSRF token
 function get_csrf_token(): string {
     if (empty($_SESSION['csrf_token'])) {

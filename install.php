@@ -115,8 +115,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             // 5. Seed Pre-Loaded Academic Sample Data if checked
             if ($loadSamples) {
+                // Create sample student accounts
+                $samplePass = password_hash('student123', PASSWORD_BCRYPT);
+                $sampleStudents = [
+                    'tanvir.cse@seu.edu.bd'  => ['2021100000145', 'Tanvir Ahmed', 'tanvir.cse@seu.edu.bd', '01811223344', 'CSE'],
+                    'nusrat.eee@seu.edu.bd'  => ['2021200000098', 'Nusrat Jahan', 'nusrat.eee@seu.edu.bd', '01911445566', 'EEE'],
+                    'sabbir.arc@seu.edu.bd'  => ['2021100000312', 'Sabbir Hossain', 'sabbir.arc@seu.edu.bd', '01722556677', 'Architecture']
+                ];
+
+                $studStmt = $rootPdo->prepare("
+                    INSERT INTO `users` (`student_id`, `full_name`, `email`, `phone`, `department`, `role`, `password_hash`)
+                    VALUES (?, ?, ?, ?, ?, 'student', ?)
+                    ON DUPLICATE KEY UPDATE `full_name` = VALUES(`full_name`)
+                ");
+                $studentIds = [];
+                foreach ($sampleStudents as $email => $s) {
+                    $studStmt->execute([$s[0], $s[1], $s[2], $s[3], $s[4], $samplePass]);
+                    $sId = $rootPdo->lastInsertId();
+                    if (!$sId) {
+                        $fStmt = $rootPdo->prepare("SELECT id FROM users WHERE email = ?");
+                        $fStmt->execute([$email]);
+                        $sId = $fStmt->fetchColumn();
+                    }
+                    $studentIds[$email] = (int)$sId;
+                }
+
                 $sampleItems = [
                     [
+                        'seller'          => $studentIds['tanvir.cse@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'Introduction to Algorithms (CLRS 3rd Edition)',
                         'category'        => 'Textbooks',
                         'course_code'     => 'CSE 311',
@@ -129,6 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'image_url'       => 'assets/uploads/clrs_algorithms.jpg'
                     ],
                     [
+                        'seller'          => $studentIds['nusrat.eee@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'Arduino Uno R3 + Sensor Starter Kit (16 Sensors + Cables)',
                         'category'        => 'Lab Gear & Kits',
                         'course_code'     => 'CSE 316',
@@ -141,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'image_url'       => 'assets/uploads/arduino_kit.jpg'
                     ],
                     [
+                        'seller'          => $studentIds['sabbir.arc@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'Casio fx-991EX ClassWiz Scientific Calculator (Original)',
                         'category'        => 'Electronics & Calculators',
                         'course_code'     => 'MAT 101',
@@ -153,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'image_url'       => 'assets/uploads/casio_calculator.jpg'
                     ],
                     [
+                        'seller'          => $studentIds['sabbir.arc@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'Rotring Engineering Drawing Board (A2 Size) + T-Square & Set Squares',
                         'category'        => 'Drawing & Tools',
                         'course_code'     => 'ENG 103',
@@ -165,6 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'image_url'       => 'assets/uploads/drawing_tools.jpg'
                     ],
                     [
+                        'seller'          => $studentIds['nusrat.eee@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'Digital Multimeter DT-830D + Test Leads & 9V Battery',
                         'category'        => 'Lab Gear & Kits',
                         'course_code'     => 'EEE 102',
@@ -177,6 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'image_url'       => 'assets/uploads/multimeter.jpg'
                     ],
                     [
+                        'seller'          => $studentIds['tanvir.cse@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'Database System Concepts (Silberschatz, Korth 7th Edition)',
                         'category'        => 'Textbooks',
                         'course_code'     => 'CSE 341',
@@ -189,6 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'image_url'       => 'assets/uploads/db_textbook.jpg'
                     ],
                     [
+                        'seller'          => $studentIds['nusrat.eee@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'Solderless Breadboard (830 Tie Points) + 4x IC 7400/7408/7432 Chips',
                         'category'        => 'Lab Gear & Kits',
                         'course_code'     => 'CSE 225',
@@ -201,6 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'image_url'       => 'assets/uploads/breadboard_ic.jpg'
                     ],
                     [
+                        'seller'          => $studentIds['sabbir.arc@seu.edu.bd'] ?? $adminUserId,
                         'title'           => 'USB 3.0 to Gigabit Ethernet Adapter (Aluminium Body)',
                         'category'        => 'Electronics & Calculators',
                         'course_code'     => 'CSE 411',
@@ -223,7 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
                 foreach ($sampleItems as $item) {
                     $itemStmt->execute([
-                        ':user_id'         => $adminUserId,
+                        ':user_id'         => $item['seller'],
                         ':title'           => $item['title'],
                         ':category'        => $item['category'],
                         ':course_code'     => $item['course_code'],
