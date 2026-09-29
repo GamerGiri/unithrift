@@ -81,6 +81,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     `description` TEXT NOT NULL,
                     `meetup_location` VARCHAR(120) NOT NULL,
                     `image_icon` VARCHAR(10) DEFAULT '📦',
+                    `image_url` VARCHAR(255) DEFAULT NULL,
                     `status` ENUM('Available', 'Reserved', 'Sold') DEFAULT 'Available',
                     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

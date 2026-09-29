@@ -47,18 +47,9 @@ $flash = get_flash();
         <ul class="nav-links" id="navLinks">
             <li><a href="index.php" class="<?= $currentPage === 'index.php' ? 'active' : '' ?>">Home</a></li>
             <li><a href="marketplace.php" class="<?= $currentPage === 'marketplace.php' ? 'active' : '' ?>">Marketplace</a></li>
-            <li><a href="calculator.php" class="<?= $currentPage === 'calculator.php' ? 'active' : '' ?>">Savings Calculator</a></li>
+            <li><a href="calculator.php" class="<?= $currentPage === 'calculator.php' ? 'active' : '' ?>">Calculator</a></li>
             <?php if ($currentUser): ?>
-                <li>
-                    <a href="my_listings.php" class="<?= $currentPage === 'my_listings.php' ? 'active' : '' ?>">
-                        My Listings &amp; Sell
-                    </a>
-                </li>
-                <li>
-                    <a href="profile.php" class="<?= $currentPage === 'profile.php' ? 'active' : '' ?>">
-                        Profile
-                    </a>
-                </li>
+                <li><a href="my_listings.php" class="<?= $currentPage === 'my_listings.php' ? 'active' : '' ?>">My Listings</a></li>
                 <?php if (is_admin()): ?>
                     <li>
                         <a href="admin.php" class="<?= $currentPage === 'admin.php' ? 'active' : '' ?>" style="color: var(--warning); font-weight: 700;">
@@ -70,13 +61,14 @@ $flash = get_flash();
         </ul>
 
         <div class="nav-actions">
+
             <!-- Dark / Light Theme Toggle -->
             <button id="themeToggle" class="theme-toggle-btn" title="Toggle Theme" aria-label="Toggle Dark/Light Mode">
                 🌙
             </button>
 
             <?php if ($currentUser): ?>
-                <a href="profile.php" class="user-menu-pill" title="View Profile &amp; Update Mobile Number" style="text-decoration: none; color: inherit;">
+                <a href="profile.php" class="user-menu-pill" title="View Profile &amp; Update Mobile Number" style="text-decoration: none; color: inherit; white-space: nowrap;">
                     <span class="user-avatar-sm">
                         <?= strtoupper(substr($currentUser['full_name'], 0, 1)) ?>
                     </span>
@@ -85,11 +77,11 @@ $flash = get_flash();
                         <span style="font-size: 0.65rem; background: var(--warning); color: #000; padding: 1px 5px; border-radius: var(--radius-full); font-weight: 800;">ADMIN</span>
                     <?php endif; ?>
                 </a>
-                <a href="logout.php" class="btn btn-outline btn-sm" title="Log Out">
+                <a href="logout.php" class="btn btn-outline btn-sm" title="Log Out" style="white-space: nowrap;">
                     Log Out
                 </a>
             <?php else: ?>
-                <a href="auth.php" class="btn btn-primary btn-sm">
+                <a href="auth.php" class="btn btn-primary btn-sm" style="white-space: nowrap;">
                     Sign In
                 </a>
             <?php endif; ?>

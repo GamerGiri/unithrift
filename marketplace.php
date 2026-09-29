@@ -109,7 +109,11 @@ try {
                  data-discount="<?= $discount ?>">
                  
                 <div class="card-img-wrap">
-                    <span class="card-img-placeholder"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
+                    <?php if (!empty($item['image_url']) && file_exists(__DIR__ . '/' . $item['image_url'])): ?>
+                        <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="<?= htmlspecialchars($item['title']) ?>" class="card-img-real">
+                    <?php else: ?>
+                        <span class="card-img-placeholder"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
+                    <?php endif; ?>
                     <span class="card-badge-category"><?= htmlspecialchars($item['category']) ?></span>
                     <?php if ($discount > 0): ?>
                         <span class="card-badge-discount"><?= $discount ?>% OFF</span>

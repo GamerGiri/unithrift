@@ -12,6 +12,34 @@ $userId = (int)$_SESSION['user_id'];
 $csrfToken = get_csrf_token();
 $error = '';
 
+// Helper function to handle image upload safely
+function save_item_image(?array $file): ?string {
+    if (!$file || empty($file['tmp_name']) || $file['error'] !== UPLOAD_ERR_OK) {
+        return null;
+    }
+    $allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    $fileInfo = @getimagesize($file['tmp_name']);
+    if (!$fileInfo || !in_array($fileInfo['mime'], $allowedMimes)) {
+        return null;
+    }
+    if ($file['size'] > 5 * 1024 * 1024) { // Max 5MB
+        return null;
+    }
+    $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $ext = strtolower($ext) ?: 'jpg';
+    if ($ext === 'jpeg') $ext = 'jpg';
+
+    $uploadDir = __DIR__ . '/assets/uploads/';
+    if (!is_dir($uploadDir)) {
+        mkdir($uploadDir, 0755, true);
+    }
+    $filename = 'item_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+    if (move_uploaded_file($file['tmp_name'], $uploadDir . $filename)) {
+        return 'assets/uploads/' . $filename;
+    }
+    return null;
+}
+
 // Handle POST Actions: Create, Update, Delete, Status Toggle
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -36,6 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $description    = trim($_POST['description'] ?? '');
         $meetupLocation = trim($_POST['meetup_location'] ?? 'SEU Main Cafeteria');
         $icon           = trim($_POST['image_icon'] ?? '📦');
+        $imageUrl       = save_item_image($_FILES['item_image'] ?? null);
 
         if (empty($title) || empty($description) || empty($meetupLocation)) {
             set_flash('error', 'Title, description, and meetup location are required.');
@@ -45,9 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $stmt = $pdo->prepare("
                     INSERT INTO items 
-                    (user_id, title, category, course_code, item_condition, original_price, selling_price, description, meetup_location, image_icon, status)
+                    (user_id, title, category, course_code, item_condition, original_price, selling_price, description, meetup_location, image_icon, image_url, status)
                     VALUES 
-                    (:uid, :title, :category, :course, :condition, :orig, :sell, :desc, :meetup, :icon, 'Available')
+                    (:uid, :title, :category, :course, :condition, :orig, :sell, :desc, :meetup, :icon, :img, 'Available')
                 ");
                 $stmt->execute([
                     ':uid'       => $userId,
@@ -59,10 +88,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ':sell'      => $sellPrice,
                     ':desc'      => $description,
                     ':meetup'    => $meetupLocation,
-                    ':icon'      => $icon
+                    ':icon'      => $icon,
+                    ':img'       => $imageUrl
                 ]);
 
-                set_flash('success', 'Your academic item has been listed successfully!');
+                set_flash('success', 'Your academic item has been listed successfully with photo!');
                 header("Location: my_listings.php");
                 exit();
             } catch (PDOException $e) {
@@ -86,6 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $meetupLocation = trim($_POST['meetup_location'] ?? 'SEU Main Cafeteria');
         $status         = trim($_POST['status'] ?? 'Available');
         $icon           = trim($_POST['image_icon'] ?? '📦');
+        $newImageUrl    = save_item_image($_FILES['item_image'] ?? null);
 
         if (empty($title) || empty($description) || empty($meetupLocation) || $itemId <= 0) {
             set_flash('error', 'Invalid input data for update.');
@@ -93,35 +124,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             set_flash('error', 'Selling price must be greater than zero.');
         } else {
             try {
-                // Strict ownership check: user_id = :uid
-                $stmt = $pdo->prepare("
-                    UPDATE items SET 
-                        title = :title,
-                        category = :category,
-                        course_code = :course,
-                        item_condition = :condition,
-                        original_price = :orig,
-                        selling_price = :sell,
-                        description = :desc,
-                        meetup_location = :meetup,
-                        status = :status,
-                        image_icon = :icon
-                    WHERE id = :id AND user_id = :uid
-                ");
-                $stmt->execute([
-                    ':title'     => $title,
-                    ':category'  => $category,
-                    ':course'    => $courseCode ?: null,
-                    ':condition' => $condition,
-                    ':orig'      => ($origPrice > 0 ? $origPrice : $sellPrice),
-                    ':sell'      => $sellPrice,
-                    ':desc'      => $description,
-                    ':meetup'    => $meetupLocation,
-                    ':status'    => $status,
-                    ':icon'      => $icon,
-                    ':id'        => $itemId,
-                    ':uid'       => $userId
-                ]);
+                if ($newImageUrl) {
+                    $stmt = $pdo->prepare("
+                        UPDATE items SET 
+                            title = :title,
+                            category = :category,
+                            course_code = :course,
+                            item_condition = :condition,
+                            original_price = :orig,
+                            selling_price = :sell,
+                            description = :desc,
+                            meetup_location = :meetup,
+                            status = :status,
+                            image_icon = :icon,
+                            image_url = :img
+                        WHERE id = :id AND user_id = :uid
+                    ");
+                    $stmt->execute([
+                        ':title'     => $title,
+                        ':category'  => $category,
+                        ':course'    => $courseCode ?: null,
+                        ':condition' => $condition,
+                        ':orig'      => ($origPrice > 0 ? $origPrice : $sellPrice),
+                        ':sell'      => $sellPrice,
+                        ':desc'      => $description,
+                        ':meetup'    => $meetupLocation,
+                        ':status'    => $status,
+                        ':icon'      => $icon,
+                        ':img'       => $newImageUrl,
+                        ':id'        => $itemId,
+                        ':uid'       => $userId
+                    ]);
+                } else {
+                    $stmt = $pdo->prepare("
+                        UPDATE items SET 
+                            title = :title,
+                            category = :category,
+                            course_code = :course,
+                            item_condition = :condition,
+                            original_price = :orig,
+                            selling_price = :sell,
+                            description = :desc,
+                            meetup_location = :meetup,
+                            status = :status,
+                            image_icon = :icon
+                        WHERE id = :id AND user_id = :uid
+                    ");
+                    $stmt->execute([
+                        ':title'     => $title,
+                        ':category'  => $category,
+                        ':course'    => $courseCode ?: null,
+                        ':condition' => $condition,
+                        ':orig'      => ($origPrice > 0 ? $origPrice : $sellPrice),
+                        ':sell'      => $sellPrice,
+                        ':desc'      => $description,
+                        ':meetup'    => $meetupLocation,
+                        ':status'    => $status,
+                        ':icon'      => $icon,
+                        ':id'        => $itemId,
+                        ':uid'       => $userId
+                    ]);
+                }
 
                 if ($stmt->rowCount() > 0) {
                     set_flash('success', 'Listing updated successfully!');
@@ -134,8 +197,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Update failed: ' . $e->getMessage());
             }
         }
-    }
-
     // ==========================================
     // 3. QUICK STATUS TOGGLE
     // ==========================================
@@ -274,7 +335,11 @@ require_once __DIR__ . '/includes/header.php';
                         <tr>
                             <td data-label="Item">
                                 <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                    <span style="font-size: 1.7rem;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
+                                    <?php if (!empty($item['image_url']) && file_exists(__DIR__ . '/' . $item['image_url'])): ?>
+                                        <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="Photo" style="width: 46px; height: 46px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-color); flex-shrink: 0;">
+                                    <?php else: ?>
+                                        <span style="font-size: 1.7rem; flex-shrink: 0;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
+                                    <?php endif; ?>
                                     <div>
                                         <a href="item_details.php?id=<?= (int)$item['id'] ?>" style="font-weight: 700; color: var(--text-primary);">
                                             <?= htmlspecialchars($item['title']) ?>
@@ -349,13 +414,19 @@ require_once __DIR__ . '/includes/header.php';
             <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
         </div>
 
-        <form method="POST" action="my_listings.php">
+        <form method="POST" action="my_listings.php" enctype="multipart/form-data">
             <input type="hidden" name="action" value="create">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
 
             <div class="form-group">
                 <label class="form-label">Item Title *</label>
                 <input type="text" name="title" class="form-control" placeholder="e.g., Introduction to Algorithms (CLRS 3rd Edition)" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Item Photo (Optional, JPG, PNG, WEBP &bull; Max 5MB)</label>
+                <input type="file" name="item_image" class="form-control" accept="image/jpeg,image/png,image/webp">
+                <small style="display: block; margin-top: 4px; color: var(--text-muted); font-size: 0.8rem;">Upload a clear photo of your actual book, gear, or tool</small>
             </div>
 
             <div class="form-row">
@@ -444,7 +515,7 @@ require_once __DIR__ . '/includes/header.php';
             <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
         </div>
 
-        <form method="POST" action="my_listings.php" id="editItemForm">
+        <form method="POST" action="my_listings.php" id="editItemForm" enctype="multipart/form-data">
             <input type="hidden" name="action" value="update">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
             <input type="hidden" name="item_id" id="editItemId" value="">
@@ -452,6 +523,12 @@ require_once __DIR__ . '/includes/header.php';
             <div class="form-group">
                 <label class="form-label">Item Title *</label>
                 <input type="text" name="title" id="editTitle" class="form-control" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Change Photo (Optional, leave empty to keep current)</label>
+                <div id="editImagePreview" style="margin-bottom: 0.5rem; display: none;"></div>
+                <input type="file" name="item_image" class="form-control" accept="image/jpeg,image/png,image/webp">
             </div>
 
             <div class="form-row">
@@ -581,6 +658,16 @@ function openEditModal(item) {
     document.getElementById('editOrigPrice').value = item.original_price;
     document.getElementById('editSellPrice').value = item.selling_price;
     document.getElementById('editDesc').value = item.description;
+
+    // Image preview for existing photo
+    const previewContainer = document.getElementById('editImagePreview');
+    if (item.image_url) {
+        previewContainer.innerHTML = `<div style="display: flex; align-items: center; gap: 0.75rem;"><img src="${item.image_url}" alt="Current Image" style="width: 50px; height: 50px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); object-fit: cover;"> <span style="font-size: 0.8rem; color: var(--text-muted);">Current photo attached (upload new to replace)</span></div>`;
+        previewContainer.style.display = 'block';
+    } else {
+        previewContainer.innerHTML = '';
+        previewContainer.style.display = 'none';
+    }
 
     // Trigger price calculator
     const editForm = document.getElementById('editItemForm');

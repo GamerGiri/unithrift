@@ -106,7 +106,9 @@ $totalUsers = 0;
 $totalListings = 0;
 $totalAvailable = 0;
 $totalSold = 0;
-$totalSavings = 0;
+$totalMoneySold = 0;
+$totalSavingsOnSold = 0;
+$totalActiveValue = 0;
 $categoryCounts = [];
 
 try {
@@ -114,7 +116,15 @@ try {
     $totalListings = (int)$pdo->query("SELECT COUNT(*) FROM items")->fetchColumn();
     $totalAvailable = (int)$pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Available'")->fetchColumn();
     $totalSold = (int)$pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Sold'")->fetchColumn();
-    $totalSavings = (float)$pdo->query("SELECT SUM(original_price - selling_price) FROM items WHERE original_price > selling_price")->fetchColumn();
+    
+    // Total money exchanged for items actually sold
+    $totalMoneySold = (float)$pdo->query("SELECT COALESCE(SUM(selling_price), 0) FROM items WHERE status = 'Sold'")->fetchColumn();
+    
+    // Realized money saved by students on items actually sold
+    $totalSavingsOnSold = (float)$pdo->query("SELECT COALESCE(SUM(original_price - selling_price), 0) FROM items WHERE status = 'Sold' AND original_price > selling_price")->fetchColumn();
+    
+    // Total inventory value of currently active listings
+    $totalActiveValue = (float)$pdo->query("SELECT COALESCE(SUM(selling_price), 0) FROM items WHERE status = 'Available'")->fetchColumn();
 
     // Category distribution
     $stmt = $pdo->query("SELECT category, COUNT(*) as count FROM items GROUP BY category");
@@ -174,18 +184,18 @@ require_once __DIR__ . '/includes/header.php';
 
 <div class="container" style="padding-top: 2rem; padding-bottom: 3.5rem;">
 
-    <!-- Admin Panel Header -->
-    <div class="section-header" style="margin-bottom: 1.5rem;">
+    <!-- Admin Command Banner Header -->
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.5rem 1.75rem; margin-bottom: 2rem; box-shadow: var(--shadow-sm); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
         <div>
             <div style="display: inline-flex; align-items: center; gap: 0.5rem; background: var(--warning-light); color: var(--warning); padding: 3px 10px; border-radius: var(--radius-full); font-size: 0.78rem; font-weight: 800; margin-bottom: 0.5rem;">
                 🛡️ System Administrator Mode
             </div>
-            <h1 class="section-title">Administrator Command Center</h1>
-            <p class="section-desc">Full platform oversight: moderate campus listings, manage student accounts, and view platform metrics</p>
+            <h1 style="font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 0.25rem;">Administrator Command Center</h1>
+            <p style="color: var(--text-secondary); font-size: 0.92rem; margin: 0;">Moderate campus listings, manage student accounts, and review marketplace cashflow</p>
         </div>
-        <div style="display: flex; gap: 0.75rem;">
+        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
             <a href="marketplace.php" class="btn btn-outline btn-sm">
-                🏪 View Marketplace
+                🏪 Marketplace
             </a>
             <a href="my_listings.php" class="btn btn-primary btn-sm">
                 ➕ Post Item as Admin
@@ -193,32 +203,37 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
 
-    <!-- Platform KPI Overview Cards -->
+    <!-- Platform KPI Overview Cards (Sold Money First, Then Item-Basis Savings) -->
     <div class="stats-grid" style="margin-bottom: 2rem;">
         <div class="stat-card">
-            <div class="stat-icon">👥</div>
-            <div class="stat-value"><?= $totalUsers ?></div>
-            <div class="stat-label">Registered Students</div>
+            <div class="stat-icon">💰</div>
+            <div class="stat-value"><?= format_price($totalMoneySold) ?></div>
+            <div class="stat-label">Total Money Sold</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;"><?= $totalSold ?> items successfully sold</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🎉</div>
+            <div class="stat-value"><?= format_price($totalSavingsOnSold) ?></div>
+            <div class="stat-label">Realized Savings (Sold)</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Money saved by buyers vs new retail</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🏷️</div>
+            <div class="stat-value"><?= format_price($totalActiveValue) ?></div>
+            <div class="stat-label">Active Market Inventory</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;"><?= $totalAvailable ?> listings ready for pickup</div>
         </div>
         <div class="stat-card">
             <div class="stat-icon">📦</div>
             <div class="stat-value"><?= $totalListings ?></div>
             <div class="stat-label">Total Listings Posted</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Across all academic categories</div>
         </div>
         <div class="stat-card">
-            <div class="stat-icon">🟢</div>
-            <div class="stat-value"><?= $totalAvailable ?></div>
-            <div class="stat-label">Active / Available</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">✅</div>
-            <div class="stat-value"><?= $totalSold ?></div>
-            <div class="stat-label">Items Re-Homed (Sold)</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">💰</div>
-            <div class="stat-value"><?= APP_CURRENCY ?> <?= number_format($totalSavings) ?></div>
-            <div class="stat-label">Total Student Savings</div>
+            <div class="stat-icon">👥</div>
+            <div class="stat-value"><?= $totalUsers ?></div>
+            <div class="stat-label">Registered Students</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Verified university accounts</div>
         </div>
     </div>
 
@@ -262,7 +277,7 @@ require_once __DIR__ . '/includes/header.php';
                         <th>Listing Details</th>
                         <th>Seller / Student</th>
                         <th>Category</th>
-                        <th>Resale Price</th>
+                        <th>Pricing &amp; Savings</th>
                         <th>Status</th>
                         <th>Date Posted</th>
                         <th style="text-align: right;">Moderation Action</th>
@@ -280,8 +295,12 @@ require_once __DIR__ . '/includes/header.php';
                             <tr>
                                 <td data-label="Listing ID" style="font-weight: 700; color: var(--text-muted);">#<?= (int)$item['id'] ?></td>
                                 <td data-label="Listing Details">
-                                    <div style="display: flex; align-items: center; gap: 0.6rem;">
-                                        <span style="font-size: 1.4rem;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <?php if (!empty($item['image_url']) && file_exists(__DIR__ . '/' . $item['image_url'])): ?>
+                                            <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="Photo" style="width: 44px; height: 44px; border-radius: var(--radius-sm); object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;">
+                                        <?php else: ?>
+                                            <span style="font-size: 1.6rem; flex-shrink: 0;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
+                                        <?php endif; ?>
                                         <div>
                                             <a href="item_details.php?id=<?= (int)$item['id'] ?>" target="_blank" style="font-weight: 700; color: var(--text-primary);">
                                                 <?= htmlspecialchars($item['title']) ?> 🔗
@@ -300,11 +319,22 @@ require_once __DIR__ . '/includes/header.php';
                                 <td data-label="Category">
                                     <span class="card-badge-category" style="position: static; font-size: 0.72rem;"><?= htmlspecialchars($item['category']) ?></span>
                                 </td>
-                                <td data-label="Resale Price">
-                                    <strong style="color: var(--accent);"><?= format_price($item['selling_price']) ?></strong>
-                                    <div style="font-size: 0.72rem; color: var(--text-muted); text-decoration: line-through;">
-                                        <?= format_price($item['original_price']) ?>
+                                <td data-label="Pricing &amp; Savings">
+                                    <div style="font-weight: 800; color: var(--accent); font-size: 0.95rem;">
+                                        <?= format_price($item['selling_price']) ?>
                                     </div>
+                                    <div style="font-size: 0.74rem; color: var(--text-muted);">
+                                        New: <span style="text-decoration: line-through;"><?= format_price($item['original_price']) ?></span>
+                                    </div>
+                                    <?php 
+                                        $savedAmount = max(0, (float)$item['original_price'] - (float)$item['selling_price']);
+                                        $savedPct = calc_discount_pct($item['original_price'], $item['selling_price']);
+                                    ?>
+                                    <?php if ($savedAmount > 0): ?>
+                                        <div style="font-size: 0.74rem; font-weight: 700; color: var(--success); margin-top: 2px;">
+                                            💰 Saves <?= format_price($savedAmount) ?> (<?= $savedPct ?>%)
+                                        </div>
+                                    <?php endif; ?>
                                 </td>
                                 <td data-label="Status">
                                     <form method="POST" action="admin.php" style="display: inline-block;">
