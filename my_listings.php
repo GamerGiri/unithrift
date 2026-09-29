@@ -214,15 +214,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: my_listings.php");
         exit();
     }
+
+    // ==========================================
+    // 5. NOTIFICATIONS: Mark as Read
+    // ==========================================
+    elseif ($action === 'mark_notif_read') {
+        $notifId = (int)($_POST['notif_id'] ?? 0);
+        if ($notifId > 0) {
+            try {
+                $stmt = $pdo->prepare("UPDATE notifications SET is_read = 1 WHERE id = :id AND user_id = :uid");
+                $stmt->execute([':id' => $notifId, ':uid' => $userId]);
+            } catch (PDOException $e) {}
+        }
+        header("Location: my_listings.php#notifications");
+        exit();
+    }
 }
 
 // ==========================================
-// 5. READ (R): Fetch user's listings & metrics
+// 6. READ (R): Fetch user's listings & metrics
 // ==========================================
 $userListings = [];
 $statsTotalItems = 0;
 $statsSoldItems = 0;
 $statsActiveValue = 0;
+$userNotifications = [];
 
 try {
     $stmt = $pdo->prepare("SELECT * FROM items WHERE user_id = :uid ORDER BY id DESC");
@@ -237,8 +253,12 @@ try {
             $statsActiveValue += (float)$li['selling_price'];
         }
     }
+
+    $nStmt = $pdo->prepare("SELECT * FROM notifications WHERE user_id = :uid ORDER BY id DESC LIMIT 10");
+    $nStmt->execute([':uid' => $userId]);
+    $userNotifications = $nStmt->fetchAll();
 } catch (PDOException $e) {
-    $error = "Failed to load listings: " . $e->getMessage();
+    $error = "Failed to load studio data: " . $e->getMessage();
 }
 
 require_once __DIR__ . '/includes/header.php';
@@ -258,6 +278,57 @@ require_once __DIR__ . '/includes/header.php';
             </button>
         </div>
     </div>
+
+    <!-- Administrative & Safety Notifications Banner -->
+    <?php if (!empty($userNotifications)): ?>
+        <div id="notifications" style="margin-bottom: 2rem;">
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; box-shadow: var(--shadow-sm);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span style="font-size: 1.2rem;">🔔</span>
+                        <h3 style="font-size: 1.1rem; font-weight: 800; margin: 0;">Campus Safety &amp; Administrative Notices</h3>
+                    </div>
+                    <?php 
+                        $hasUnread = false;
+                        foreach ($userNotifications as $n) { if (!$n['is_read']) { $hasUnread = true; break; } }
+                    ?>
+                    <?php if ($hasUnread): ?>
+                        <span class="badge" style="background: var(--danger); color: #fff; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: var(--radius-full);">NEW ALERTS</span>
+                    <?php endif; ?>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <?php foreach ($userNotifications as $notif): ?>
+                        <div style="background: <?= $notif['is_read'] ? 'var(--bg-surface)' : 'var(--warning-light)' ?>; border: 1px solid <?= $notif['is_read'] ? 'var(--border-color)' : 'rgba(234, 88, 12, 0.4)' ?>; border-radius: var(--radius-sm); padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; flex-wrap: wrap;">
+                            <div style="flex: 1; min-width: 240px;">
+                                <div style="font-weight: 700; font-size: 0.92rem; color: <?= $notif['is_read'] ? 'var(--text-primary)' : 'var(--warning)' ?>; margin-bottom: 0.25rem;">
+                                    <?= htmlspecialchars($notif['title']) ?>
+                                </div>
+                                <div style="font-size: 0.86rem; color: var(--text-secondary); line-height: 1.4;">
+                                    <?= nl2br(htmlspecialchars($notif['message'])) ?>
+                                </div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.35rem;">
+                                    Received: <?= date('M d, Y h:i A', strtotime($notif['created_at'])) ?>
+                                </div>
+                            </div>
+                            <?php if (!$notif['is_read']): ?>
+                                <form method="POST" action="my_listings.php" style="margin: 0; align-self: center;">
+                                    <input type="hidden" name="action" value="mark_notif_read">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                    <input type="hidden" name="notif_id" value="<?= (int)$notif['id'] ?>">
+                                    <button type="submit" class="btn btn-outline btn-sm" style="font-size: 0.78rem; padding: 4px 10px;" title="Dismiss alert">
+                                        ✓ Mark as Read
+                                    </button>
+                                </form>
+                            <?php else: ?>
+                                <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">✓ Read</span>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
 
     <!-- Personal Seller Metrics -->
     <div class="stats-grid" style="margin-bottom: 2.5rem;">

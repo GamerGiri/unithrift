@@ -48,6 +48,44 @@ try {
     exit();
 }
 
+$csrfToken = get_csrf_token();
+
+// Handle Report Submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'report_item') {
+    require_login();
+    $token = $_POST['csrf_token'] ?? '';
+    if (!verify_csrf_token($token)) {
+        set_flash('error', 'Security verification failed.');
+        header("Location: item_details.php?id={$itemId}");
+        exit();
+    }
+    $reason = trim($_POST['reason'] ?? '');
+    $details = trim($_POST['details'] ?? '');
+    $reporterId = (int)$_SESSION['user_id'];
+
+    if (empty($reason) || empty($details)) {
+        set_flash('error', 'Please select a reason and provide details.');
+    } else {
+        try {
+            $repStmt = $pdo->prepare("
+                INSERT INTO reports (item_id, reporter_id, reason, details, status)
+                VALUES (:item_id, :reporter_id, :reason, :details, 'Pending')
+            ");
+            $repStmt->execute([
+                ':item_id'     => $itemId,
+                ':reporter_id' => $reporterId,
+                ':reason'      => $reason,
+                ':details'     => $details
+            ]);
+            set_flash('success', 'Thank you! Your safety report has been submitted to campus administrators for review.');
+        } catch (PDOException $e) {
+            set_flash('error', 'Failed to submit report: ' . $e->getMessage());
+        }
+    }
+    header("Location: item_details.php?id={$itemId}");
+    exit();
+}
+
 $pageTitle = $item['title'];
 require_once __DIR__ . '/includes/header.php';
 
@@ -96,11 +134,16 @@ $isOwner = ($currentUser && $currentUser['id'] == $item['user_id']);
                 <h4 style="font-size: 0.95rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
                     <span>🛡️</span> Campus Handover Tips
                 </h4>
-                <ul style="font-size: 0.85rem; color: var(--text-secondary); padding-left: 1.25rem; line-height: 1.5;">
+                <ul style="font-size: 0.85rem; color: var(--text-secondary); padding-left: 1.25rem; line-height: 1.5; margin-bottom: 0.75rem;">
                     <li>Meet inside the university campus (Cafeteria, Library, Lab).</li>
                     <li>Inspect book pages, circuits, or calculator keys before paying.</li>
                     <li>Support safe peer-to-peer student transactions.</li>
                 </ul>
+                <div style="border-top: 1px dashed var(--border-color); padding-top: 0.75rem; text-align: center;">
+                    <button type="button" class="btn btn-outline btn-sm" onclick="openModal('reportModal')" style="font-size: 0.8rem; color: var(--danger); border-color: var(--border-color); width: 100%;">
+                        🚩 Report this Listing
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -261,6 +304,58 @@ $isOwner = ($currentUser && $currentUser['id'] == $item['user_id']);
         </div>
     <?php endif; ?>
 
+</div>
+
+<!-- Report Listing Modal -->
+<div class="modal-overlay" id="reportModal">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h2 class="modal-title" style="color: var(--danger); font-size: 1.25rem;">🚩 Report this Listing</h2>
+            <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+        </div>
+
+        <?php if (!is_logged_in()): ?>
+            <div style="text-align: center; padding: 1.5rem 0;">
+                <p style="color: var(--text-secondary); margin-bottom: 1.25rem;">
+                    Please log in with your university student account to submit a report to campus administrators.
+                </p>
+                <a href="auth.php" class="btn btn-primary">Sign In to Report</a>
+            </div>
+        <?php else: ?>
+            <form method="POST" action="item_details.php?id=<?= (int)$item['id'] ?>">
+                <input type="hidden" name="action" value="report_item">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+
+                <p style="font-size: 0.88rem; color: var(--text-secondary); margin-bottom: 1.25rem;">
+                    Listing: <strong style="color: var(--text-primary);"><?= htmlspecialchars($item['title']) ?></strong><br>
+                    Seller: <span style="color: var(--accent);"><?= htmlspecialchars($item['seller_name']) ?></span>
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label">Report Category *</label>
+                    <select name="reason" class="form-control" required>
+                        <option value="">-- Select issue reason --</option>
+                        <option value="Misleading / Incorrect Info">Misleading or false description / price</option>
+                        <option value="Damaged / Broken Gear">Damaged or broken gear claimed as working</option>
+                        <option value="Inappropriate / Prohibited Item">Prohibited or non-academic item</option>
+                        <option value="Suspicious / Scam Activity">Suspicious activity or suspected scam</option>
+                        <option value="Duplicate / Spam Listing">Duplicate or spam listing</option>
+                        <option value="Other">Other issue</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Detailed Explanation *</label>
+                    <textarea name="details" class="form-control" rows="4" placeholder="Describe the issue clearly for the administrator (e.g. wrong edition, broken parts, fake specs)..." required></textarea>
+                </div>
+
+                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1rem;">
+                    <button type="button" class="btn btn-outline" data-close-modal>Cancel</button>
+                    <button type="submit" class="btn btn-danger">Submit Report</button>
+                </div>
+            </form>
+        <?php endif; ?>
+    </div>
 </div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

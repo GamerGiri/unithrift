@@ -89,7 +89,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             ");
 
-            // 4. Create Admin / Primary Account
+            // 4. Create Reports Table (Listing Moderation)
+            $rootPdo->exec("
+                CREATE TABLE IF NOT EXISTS `reports` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `item_id` INT NOT NULL,
+                    `reporter_id` INT DEFAULT NULL,
+                    `reason` VARCHAR(100) NOT NULL,
+                    `details` TEXT NOT NULL,
+                    `status` ENUM('Pending', 'Reviewed', 'Ignored', 'Resolved') DEFAULT 'Pending',
+                    `admin_notes` TEXT DEFAULT NULL,
+                    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE CASCADE,
+                    FOREIGN KEY (`reporter_id`) REFERENCES `users`(`id`) ON DELETE SET NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 5. Create Notifications Table (Direct Student Alerts & Admin Notices)
+            $rootPdo->exec("
+                CREATE TABLE IF NOT EXISTS `notifications` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `user_id` INT NOT NULL,
+                    `item_id` INT DEFAULT NULL,
+                    `title` VARCHAR(150) NOT NULL,
+                    `message` TEXT NOT NULL,
+                    `is_read` TINYINT(1) DEFAULT 0,
+                    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+                    FOREIGN KEY (`item_id`) REFERENCES `items`(`id`) ON DELETE SET NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 6. Create Admin / Primary Account
             $hashedPass = password_hash($adminPass, PASSWORD_BCRYPT);
             $userStmt = $rootPdo->prepare("
                 INSERT INTO `users` (`student_id`, `full_name`, `email`, `phone`, `department`, `role`, `password_hash`)
@@ -268,6 +299,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         ':image_icon'      => $item['image_icon'],
                         ':image_url'       => $item['image_url']
                     ]);
+                }
+
+                // Seed sample report & notification for demo
+                $firstItemId = (int)$rootPdo->query("SELECT id FROM items ORDER BY id ASC LIMIT 1")->fetchColumn();
+                $firstStudentId = (int)$rootPdo->query("SELECT id FROM users WHERE role = 'student' ORDER BY id ASC LIMIT 1")->fetchColumn();
+                $secondStudentId = (int)$rootPdo->query("SELECT id FROM users WHERE role = 'student' ORDER BY id DESC LIMIT 1")->fetchColumn();
+
+                if ($firstItemId && $firstStudentId) {
+                    $repStmt = $rootPdo->prepare("
+                        INSERT INTO `reports` (`item_id`, `reporter_id`, `reason`, `details`, `status`, `admin_notes`)
+                        VALUES (?, ?, 'Misleading Information', 'The textbook edition listed is slightly different from the course syllabus requirements.', 'Pending', NULL)
+                    ");
+                    $repStmt->execute([$firstItemId, $secondStudentId ?: $firstStudentId]);
+
+                    $notifStmt = $rootPdo->prepare("
+                        INSERT INTO `notifications` (`user_id`, `item_id`, `title`, `message`, `is_read`)
+                        VALUES (?, ?, 'Welcome to UniThrift Campus Marketplace', 'Welcome! Please adhere to our campus handover guidelines and verify condition descriptions accurately.', 0)
+                    ");
+                    $notifStmt->execute([$firstStudentId, $firstItemId]);
                 }
             }
 

@@ -187,6 +187,108 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: admin.php?tab=users");
         exit();
     }
+
+    // E. Moderation: Remove Reported Listing
+    elseif ($action === 'remove_reported_listing') {
+        $reportId = (int)($_POST['report_id'] ?? 0);
+        $itemId   = (int)($_POST['item_id'] ?? 0);
+        $sellerId = (int)($_POST['seller_id'] ?? 0);
+        $adminMsg = trim($_POST['admin_message'] ?? 'This listing was removed by campus administration following a safety report.');
+
+        if ($itemId > 0) {
+            try {
+                // Fetch item title before deleting
+                $itemTitleStmt = $pdo->prepare("SELECT title FROM items WHERE id = :id");
+                $itemTitleStmt->execute([':id' => $itemId]);
+                $itemTitle = $itemTitleStmt->fetchColumn() ?: "Listing #{$itemId}";
+
+                // Delete the listing (cascades related references)
+                $stmt = $pdo->prepare("DELETE FROM items WHERE id = :id");
+                $stmt->execute([':id' => $itemId]);
+
+                // Update report status to Resolved
+                if ($reportId > 0) {
+                    $uRep = $pdo->prepare("UPDATE reports SET status = 'Resolved', admin_notes = :notes WHERE id = :id");
+                    $uRep->execute([':notes' => 'Listing removed by administrator. ' . $adminMsg, ':id' => $reportId]);
+                }
+
+                // If seller exists, send direct administrative notification
+                if ($sellerId > 0) {
+                    $notifStmt = $pdo->prepare("
+                        INSERT INTO notifications (user_id, title, message)
+                        VALUES (:uid, :title, :msg)
+                    ");
+                    $notifStmt->execute([
+                        ':uid'   => $sellerId,
+                        ':title' => "Listing Removed by Admin: {$itemTitle}",
+                        ':msg'   => "Your listing \"{$itemTitle}\" was taken down by campus administration. Administrative Note: {$adminMsg}"
+                    ]);
+                }
+
+                set_flash('success', "Listing permanently removed and safety report marked as Resolved.");
+            } catch (PDOException $e) {
+                set_flash('error', 'Action failed: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php?tab=reports");
+        exit();
+    }
+
+    // F. Moderation: Ignore Report
+    elseif ($action === 'ignore_report') {
+        $reportId = (int)($_POST['report_id'] ?? 0);
+        if ($reportId > 0) {
+            try {
+                $stmt = $pdo->prepare("UPDATE reports SET status = 'Ignored', admin_notes = 'Reviewed and dismissed by administrator.' WHERE id = :id");
+                $stmt->execute([':id' => $reportId]);
+                set_flash('info', "Report #{$reportId} marked as Ignored.");
+            } catch (PDOException $e) {
+                set_flash('error', 'Action failed: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php?tab=reports");
+        exit();
+    }
+
+    // G. Moderation: Notify Seller with Custom Message
+    elseif ($action === 'notify_seller') {
+        $reportId = (int)($_POST['report_id'] ?? 0);
+        $sellerId = (int)($_POST['seller_id'] ?? 0);
+        $itemId   = (int)($_POST['item_id'] ?? 0);
+        $title    = trim($_POST['notice_title'] ?? 'Administrative Notice Regarding Your Listing');
+        $message  = trim($_POST['custom_message'] ?? '');
+
+        if ($sellerId <= 0 || empty($message)) {
+            set_flash('error', 'Please provide a valid seller and message content.');
+        } else {
+            try {
+                $notifStmt = $pdo->prepare("
+                    INSERT INTO notifications (user_id, item_id, title, message)
+                    VALUES (:uid, :item_id, :title, :msg)
+                ");
+                $notifStmt->execute([
+                    ':uid'     => $sellerId,
+                    ':item_id' => ($itemId > 0 ? $itemId : null),
+                    ':title'   => $title,
+                    ':msg'     => $message
+                ]);
+
+                if ($reportId > 0) {
+                    $uRep = $pdo->prepare("UPDATE reports SET status = 'Reviewed', admin_notes = :notes WHERE id = :id");
+                    $uRep->execute([
+                        ':notes' => "Official notice sent to seller: \"{$message}\"",
+                        ':id'    => $reportId
+                    ]);
+                }
+
+                set_flash('success', "Administrative message successfully delivered to student seller.");
+            } catch (PDOException $e) {
+                set_flash('error', 'Failed to send notification: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php?tab=reports");
+        exit();
+    }
 }
 
 // =========================================================================
@@ -199,6 +301,8 @@ $totalSold = 0;
 $totalMoneySold = 0;
 $totalSavingsOnSold = 0;
 $totalActiveValue = 0;
+$totalReports = 0;
+$pendingReports = 0;
 $categoryCounts = [];
 
 try {
@@ -206,6 +310,8 @@ try {
     $totalListings = (int)$pdo->query("SELECT COUNT(*) FROM items")->fetchColumn();
     $totalAvailable = (int)$pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Available'")->fetchColumn();
     $totalSold = (int)$pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Sold'")->fetchColumn();
+    $totalReports = (int)$pdo->query("SELECT COUNT(*) FROM reports")->fetchColumn();
+    $pendingReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Pending'")->fetchColumn();
     
     // Total money exchanged for items actually sold
     $totalMoneySold = (float)$pdo->query("SELECT COALESCE(SUM(selling_price), 0) FROM items WHERE status = 'Sold'")->fetchColumn();
@@ -233,6 +339,7 @@ try {
 // =========================================================================
 $allListings = [];
 $allUsers = [];
+$allReports = [];
 
 try {
     if ($activeTab === 'listings') {
@@ -264,6 +371,19 @@ try {
             ORDER BY u.id DESC
         ");
         $allUsers = $stmt->fetchAll();
+    } elseif ($activeTab === 'reports') {
+        $stmt = $pdo->query("
+            SELECT r.*, 
+                   i.title as item_title, i.selling_price as item_price, i.status as item_status, i.image_url as item_image, i.image_icon as item_icon,
+                   seller.id as seller_id, seller.full_name as seller_name, seller.email as seller_email, seller.phone as seller_phone, seller.student_id as seller_sid, seller.department as seller_dept,
+                   reporter.full_name as reporter_name, reporter.student_id as reporter_sid, reporter.email as reporter_email
+            FROM reports r
+            LEFT JOIN items i ON r.item_id = i.id
+            LEFT JOIN users seller ON i.user_id = seller.id
+            LEFT JOIN users reporter ON r.reporter_id = reporter.id
+            ORDER BY r.id DESC
+        ");
+        $allReports = $stmt->fetchAll();
     }
 } catch (PDOException $e) {
     // Graceful error handle
@@ -337,6 +457,12 @@ require_once __DIR__ . '/includes/header.php';
         </a>
         <a href="admin.php?tab=analytics" class="btn <?= $activeTab === 'analytics' ? 'btn-primary' : 'btn-outline' ?>" style="border-radius: var(--radius-sm); border-bottom-left-radius: 0; border-bottom-right-radius: 0;">
             📊 Category Analytics
+        </a>
+        <a href="admin.php?tab=reports" class="btn <?= $activeTab === 'reports' ? 'btn-primary' : 'btn-outline' ?>" style="border-radius: var(--radius-sm); border-bottom-left-radius: 0; border-bottom-right-radius: 0; position: relative;">
+            🚩 Safety Reports (<?= $totalReports ?>)
+            <?php if ($pendingReports > 0): ?>
+                <span style="background: var(--danger); color: #fff; font-size: 0.7rem; padding: 2px 7px; border-radius: var(--radius-full); margin-left: 6px; font-weight: 800;"><?= $pendingReports ?> PENDING</span>
+            <?php endif; ?>
         </a>
     </div>
 
@@ -606,6 +732,190 @@ require_once __DIR__ . '/includes/header.php';
 
         </div>
 
+    <!-- =====================================================================
+         TAB 4: SAFETY & LISTING REPORTS
+         ===================================================================== -->
+    <?php elseif ($activeTab === 'reports'): ?>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.25rem;">Campus Safety &amp; Listing Reports (<?= count($allReports) ?>)</h2>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0;">Review flagged listings, take moderation actions, dismiss invalid claims, or warn student sellers directly.</p>
+            </div>
+            
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <span class="badge" style="background: var(--warning-light); color: var(--warning); padding: 5px 12px; font-size: 0.85rem; font-weight: 700; border-radius: var(--radius-full);">
+                    ⏳ <?= $pendingReports ?> Pending Review
+                </span>
+                <span class="badge" style="background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-muted); padding: 5px 12px; font-size: 0.85rem; font-weight: 700; border-radius: var(--radius-full);">
+                    Total: <?= $totalReports ?>
+                </span>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="custom-table responsive-card-table">
+                <thead>
+                    <tr>
+                        <th>Report ID</th>
+                        <th>Target Listing</th>
+                        <th>Seller Details</th>
+                        <th>Reported By</th>
+                        <th>Reason &amp; Details</th>
+                        <th>Status</th>
+                        <th style="text-align: right;">Moderation Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($allReports)): ?>
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                                <div style="font-size: 2rem; margin-bottom: 0.5rem;">🎉</div>
+                                <strong>No safety reports on file!</strong>
+                                <div style="font-size: 0.85rem; margin-top: 4px;">Campus listings are currently clean and compliant.</div>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($allReports as $rep): ?>
+                            <tr>
+                                <td data-label="Report ID">
+                                    <div style="font-weight: 800; color: var(--text-primary);">#REP-<?= (int)$rep['id'] ?></div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);"><?= date('M d, Y h:i A', strtotime($rep['created_at'])) ?></div>
+                                </td>
+
+                                <td data-label="Target Listing">
+                                    <?php if (!empty($rep['item_title'])): ?>
+                                        <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                            <?php $repImg = get_item_image($rep['item_image'] ?? null); ?>
+                                            <?php if ($repImg): ?>
+                                                <img src="<?= htmlspecialchars($repImg) ?>" alt="Photo" style="width: 44px; height: 44px; border-radius: var(--radius-sm); object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;">
+                                            <?php else: ?>
+                                                <span style="font-size: 1.6rem; flex-shrink: 0;"><?= htmlspecialchars($rep['item_icon'] ?? '📦') ?></span>
+                                            <?php endif; ?>
+                                            <div>
+                                                <a href="item_details.php?id=<?= (int)$rep['item_id'] ?>" target="_blank" style="font-weight: 700; color: var(--text-primary);">
+                                                    <?= htmlspecialchars($rep['item_title']) ?> 🔗
+                                                </a>
+                                                <div style="font-size: 0.78rem; color: var(--text-muted);">
+                                                    Price: <?= format_price($rep['item_price']) ?> &bull; 
+                                                    <span class="badge" style="font-size: 0.7rem; padding: 1px 6px;"><?= htmlspecialchars($rep['item_status']) ?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <?php else: ?>
+                                        <div style="color: var(--danger); font-style: italic; font-size: 0.9rem;">
+                                            🗑️ Listing Removed (ID: #<?= (int)$rep['item_id'] ?>)
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td data-label="Seller Details">
+                                    <?php if (!empty($rep['seller_name'])): ?>
+                                        <div style="font-weight: 700;"><?= htmlspecialchars($rep['seller_name']) ?></div>
+                                        <div style="font-size: 0.78rem; color: var(--text-muted);">ID: <?= htmlspecialchars($rep['seller_sid'] ?? 'N/A') ?> &bull; <?= htmlspecialchars($rep['seller_dept'] ?? 'SEU') ?></div>
+                                        <div style="font-size: 0.78rem; color: var(--text-muted);">📞 <?= htmlspecialchars($rep['seller_phone'] ?? 'N/A') ?></div>
+                                    <?php else: ?>
+                                        <span style="color: var(--text-muted); font-size: 0.85rem;">Unknown / Removed</span>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td data-label="Reported By">
+                                    <?php if (!empty($rep['reporter_name'])): ?>
+                                        <div style="font-weight: 600;"><?= htmlspecialchars($rep['reporter_name']) ?></div>
+                                        <div style="font-size: 0.78rem; color: var(--text-muted);">ID: <?= htmlspecialchars($rep['reporter_sid'] ?? 'N/A') ?></div>
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);"><?= htmlspecialchars($rep['reporter_email'] ?? '') ?></div>
+                                    <?php else: ?>
+                                        <span style="color: var(--text-muted); font-size: 0.85rem;">Anonymous / Guest</span>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td data-label="Reason &amp; Details" style="max-width: 280px;">
+                                    <div style="margin-bottom: 0.35rem;">
+                                        <span style="display: inline-block; background: var(--danger-light); color: var(--danger); font-size: 0.75rem; font-weight: 800; padding: 2px 8px; border-radius: var(--radius-full);">
+                                            <?= htmlspecialchars($rep['reason']) ?>
+                                        </span>
+                                    </div>
+                                    <?php if (!empty($rep['details'])): ?>
+                                        <div style="font-size: 0.82rem; background: var(--bg-surface); padding: 0.5rem 0.65rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); color: var(--text-secondary); line-height: 1.35; margin-bottom: 0.35rem;">
+                                            &ldquo;<?= htmlspecialchars($rep['details']) ?>&rdquo;
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($rep['admin_notes'])): ?>
+                                        <div style="font-size: 0.75rem; color: var(--primary); font-weight: 600;">
+                                            🛡️ <em><?= htmlspecialchars($rep['admin_notes']) ?></em>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td data-label="Status">
+                                    <?php
+                                        $st = $rep['status'];
+                                        $badgeBg = 'var(--warning-light)';
+                                        $badgeColor = 'var(--warning)';
+                                        if ($st === 'Resolved') {
+                                            $badgeBg = 'var(--success-light)';
+                                            $badgeColor = 'var(--success)';
+                                        } elseif ($st === 'Ignored') {
+                                            $badgeBg = 'var(--bg-subtle)';
+                                            $badgeColor = 'var(--text-muted)';
+                                        } elseif ($st === 'Reviewed') {
+                                            $badgeBg = 'var(--primary-light)';
+                                            $badgeColor = 'var(--primary)';
+                                        }
+                                    ?>
+                                    <span style="display: inline-block; background: <?= $badgeBg ?>; color: <?= $badgeColor ?>; font-size: 0.75rem; font-weight: 800; padding: 3px 10px; border-radius: var(--radius-full); text-transform: uppercase;">
+                                        <?= htmlspecialchars($st) ?>
+                                    </span>
+                                </td>
+
+                                <td data-label="Moderation Actions" style="text-align: right;">
+                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end; flex-wrap: wrap;">
+                                        
+                                        <!-- Action 1: Notify Seller -->
+                                        <?php if (!empty($rep['seller_id'])): ?>
+                                            <button type="button" 
+                                                    class="btn btn-outline btn-sm" 
+                                                    title="Send Direct Administrative Warning to Seller"
+                                                    onclick="openNotifySellerModal(<?= (int)$rep['id'] ?>, <?= (int)$rep['seller_id'] ?>, '<?= htmlspecialchars(addslashes($rep['seller_name']), ENT_QUOTES) ?>', <?= (int)$rep['item_id'] ?>, '<?= htmlspecialchars(addslashes($rep['item_title'] ?? 'Listing #' . $rep['item_id']), ENT_QUOTES) ?>')">
+                                                ✉️ Notify
+                                            </button>
+                                        <?php endif; ?>
+
+                                        <!-- Action 2: Remove Listing -->
+                                        <?php if (!empty($rep['item_title'])): ?>
+                                            <form method="POST" action="admin.php?tab=reports" style="display: inline;" onsubmit="return confirm('Take down and permanently delete this reported listing?');">
+                                                <input type="hidden" name="action" value="remove_reported_listing">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                                <input type="hidden" name="report_id" value="<?= (int)$rep['id'] ?>">
+                                                <input type="hidden" name="item_id" value="<?= (int)$rep['item_id'] ?>">
+                                                <input type="hidden" name="seller_id" value="<?= (int)($rep['seller_id'] ?? 0) ?>">
+                                                <button type="submit" class="btn btn-sm btn-outline" style="color: var(--danger); border-color: var(--danger);" title="Remove listing permanently">
+                                                    🗑️ Remove
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+
+                                        <!-- Action 3: Ignore Report -->
+                                        <?php if ($rep['status'] === 'Pending'): ?>
+                                            <form method="POST" action="admin.php?tab=reports" style="display: inline;">
+                                                <input type="hidden" name="action" value="ignore_report">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                                <input type="hidden" name="report_id" value="<?= (int)$rep['id'] ?>">
+                                                <button type="submit" class="btn btn-sm btn-outline" style="color: var(--text-muted); border-color: var(--border-color);" title="Dismiss report">
+                                                    👁️ Ignore
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
     <?php endif; ?>
 
 </div>
@@ -752,6 +1062,56 @@ function openAdminEditModal(item) {
 
     openModal('adminEditModal');
 }
+
+function openNotifySellerModal(reportId, sellerId, sellerName, itemId, itemTitle) {
+    document.getElementById('notifyReportId').value = reportId || 0;
+    document.getElementById('notifySellerId').value = sellerId || 0;
+    document.getElementById('notifyItemId').value = itemId || 0;
+    document.getElementById('notifySellerName').textContent = sellerName || 'Student';
+    document.getElementById('notifyItemTitle').textContent = itemTitle || 'General Listing';
+    document.getElementById('notifyNoticeTitle').value = 'Administrative Notice: ' + (itemTitle || '');
+    document.getElementById('notifyCustomMessage').value = '';
+
+    openModal('notifySellerModal');
+}
 </script>
+
+<!-- Admin Notify Seller Modal -->
+<div class="modal-overlay" id="notifySellerModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">✉️ Notify Student Seller</h2>
+            <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+        </div>
+
+        <form method="POST" action="admin.php?tab=reports" id="notifySellerForm">
+            <input type="hidden" name="action" value="notify_seller">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+            <input type="hidden" name="report_id" id="notifyReportId" value="0">
+            <input type="hidden" name="seller_id" id="notifySellerId" value="0">
+            <input type="hidden" name="item_id" id="notifyItemId" value="0">
+
+            <div style="background: var(--bg-surface); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem; font-size: 0.88rem;">
+                <div><strong>Recipient:</strong> <span id="notifySellerName">-</span></div>
+                <div style="margin-top: 4px;"><strong>Listing Context:</strong> <span id="notifyItemTitle">-</span></div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Notice Subject *</label>
+                <input type="text" name="notice_title" id="notifyNoticeTitle" class="form-control" value="Administrative Notice Regarding Your Listing" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Custom Warning / Message *</label>
+                <textarea name="custom_message" id="notifyCustomMessage" class="form-control" rows="4" placeholder="Enter administrative warning or clarification instructions..." required></textarea>
+                <small style="color: var(--text-muted); font-size: 0.78rem;">This message will appear directly on the student seller's dashboard and notification bell.</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.5rem;">
+                📨 Deliver Administrative Notice
+            </button>
+        </form>
+    </div>
+</div>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

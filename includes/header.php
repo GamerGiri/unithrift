@@ -9,6 +9,17 @@ require_once __DIR__ . '/auth_check.php';
 $currentUser = current_user();
 $currentPage = basename($_SERVER['PHP_SELF'] ?? '');
 $flash = get_flash();
+
+$unreadNotifsCount = 0;
+if ($currentUser && isset($pdo)) {
+    try {
+        $notifCountStmt = $pdo->prepare("SELECT COUNT(*) FROM notifications WHERE user_id = :uid AND is_read = 0");
+        $notifCountStmt->execute([':uid' => $currentUser['id']]);
+        $unreadNotifsCount = (int)$notifCountStmt->fetchColumn();
+    } catch (PDOException $e) {
+        // Graceful handle
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -68,6 +79,16 @@ $flash = get_flash();
             </button>
 
             <?php if ($currentUser): ?>
+                <!-- Notifications Bell -->
+                <a href="my_listings.php#notifications" class="theme-toggle-btn" title="Administrative &amp; Safety Notices" aria-label="Notifications" style="position: relative; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; font-size: 1.05rem;">
+                    🔔
+                    <?php if ($unreadNotifsCount > 0): ?>
+                        <span style="position: absolute; top: -3px; right: -3px; background: var(--danger); color: #fff; font-size: 0.65rem; font-weight: 800; min-width: 17px; height: 17px; border-radius: 50%; display: flex; align-items: center; justify-content: center; padding: 1px; border: 2px solid var(--bg-card); line-height: 1;">
+                            <?= $unreadNotifsCount ?>
+                        </span>
+                    <?php endif; ?>
+                </a>
+
                 <a href="profile.php" class="user-menu-pill" title="View Profile &amp; Update Mobile Number" style="text-decoration: none; color: inherit; white-space: nowrap;">
                     <span class="user-avatar-sm">
                         <?= strtoupper(substr($currentUser['full_name'], 0, 1)) ?>
