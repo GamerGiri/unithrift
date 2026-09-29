@@ -122,7 +122,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
             ");
 
-            // 6. Create Admin / Primary Account
+            // 6. Create Contact Messages Table (Student & Visitor Inquiries)
+            $rootPdo->exec("
+                CREATE TABLE IF NOT EXISTS `contact_messages` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `name` VARCHAR(100) NOT NULL,
+                    `email` VARCHAR(100) NOT NULL,
+                    `phone` VARCHAR(30) DEFAULT NULL,
+                    `subject` VARCHAR(150) NOT NULL,
+                    `message` TEXT NOT NULL,
+                    `status` ENUM('unread', 'read') DEFAULT 'unread',
+                    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+
+            // 7. Create Admin / Primary Account
             $hashedPass = password_hash($adminPass, PASSWORD_BCRYPT);
             $userStmt = $rootPdo->prepare("
                 INSERT INTO `users` (`student_id`, `full_name`, `email`, `phone`, `department`, `role`, `password_hash`)

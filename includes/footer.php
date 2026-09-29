@@ -21,6 +21,7 @@
                     <li><a href="index.php">Home Overview</a></li>
                     <li><a href="marketplace.php">Browse Marketplace</a></li>
                     <li><a href="calculator.php">Savings Calculator</a></li>
+                    <li><a href="contact.php">Contact Support</a></li>
                     <li><a href="my_listings.php">Post / Manage Listings</a></li>
                     <li><a href="profile.php">Student Profile</a></li>
                 </ul>

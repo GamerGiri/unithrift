@@ -23,13 +23,23 @@ if (!in_array($userType, ['all', 'seu', 'outsiders', 'admins'])) {
 }
 
 // Report Tab Filters & Search
-$reportStatus = strtolower(trim($_GET['report_status'] ?? 'all')); // 'all', 'pending', 'reviewed', 'ignored', 'resolved'
-if (!in_array($reportStatus, ['all', 'pending', 'reviewed', 'ignored', 'resolved'])) {
+$reportStatus = strtolower(trim($_GET['report_status'] ?? 'all')); // 'all', 'pending', 'reviewed', 'ignored'
+if (!in_array($reportStatus, ['all', 'pending', 'reviewed', 'ignored'])) {
     $reportStatus = 'all';
 }
 $reportSearch = trim($_GET['report_search'] ?? '');
 if (empty($reportSearch) && ($activeTab === 'reports') && !empty($searchQuery)) {
     $reportSearch = $searchQuery;
+}
+
+// Message Tab Filters & Search
+$messageStatus = strtolower(trim($_GET['msg_status'] ?? 'all')); // 'all', 'unread', 'read'
+if (!in_array($messageStatus, ['all', 'unread', 'read'])) {
+    $messageStatus = 'all';
+}
+$messageSearch = trim($_GET['msg_search'] ?? '');
+if (empty($messageSearch) && ($activeTab === 'messages') && !empty($searchQuery)) {
+    $messageSearch = $searchQuery;
 }
 
 // =========================================================================
@@ -293,10 +303,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 $stmt = $pdo->prepare("DELETE FROM items WHERE id = :id");
                 $stmt->execute([':id' => $itemId]);
 
-                // Update report status to Resolved
+                // Delete the safety report along with the taken-down listing
                 if ($reportId > 0) {
-                    $uRep = $pdo->prepare("UPDATE reports SET status = 'Resolved', admin_notes = :notes WHERE id = :id");
-                    $uRep->execute([':notes' => 'Listing removed by administrator. ' . $adminMsg, ':id' => $reportId]);
+                    $pdo->prepare("DELETE FROM reports WHERE id = :id")->execute([':id' => $reportId]);
                 }
 
                 // If seller exists, send direct administrative notification
@@ -312,7 +321,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                     ]);
                 }
 
-                set_flash('success', "Listing permanently removed and safety report marked as Resolved.");
+                set_flash('success', "Listing permanently removed and safety report closed.");
             } catch (PDOException $e) {
                 set_flash('error', 'Action failed: ' . $e->getMessage());
             }
@@ -458,6 +467,51 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         header("Location: admin.php");
         exit();
     }
+
+    // J. Clear All Contact Inquiries & Messages
+    elseif ($action === 'admin_clear_all_messages') {
+        try {
+            $pdo->exec("DELETE FROM contact_messages");
+            set_flash('success', 'All student and visitor contact inquiries have been permanently cleared.');
+        } catch (PDOException $e) {
+            set_flash('error', 'Failed to clear messages: ' . $e->getMessage());
+        }
+        header("Location: admin.php?tab=messages");
+        exit();
+    }
+
+    // K. Delete Single Contact Message
+    elseif ($action === 'admin_delete_message') {
+        $msgId = (int)($_POST['message_id'] ?? 0);
+        if ($msgId > 0) {
+            try {
+                $stmt = $pdo->prepare("DELETE FROM contact_messages WHERE id = :id");
+                $stmt->execute([':id' => $msgId]);
+                set_flash('success', "Message #{$msgId} deleted successfully.");
+            } catch (PDOException $e) {
+                set_flash('error', 'Failed to delete message: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php?tab=messages");
+        exit();
+    }
+
+    // L. Toggle Message Read Status
+    elseif ($action === 'admin_toggle_message_status') {
+        $msgId = (int)($_POST['message_id'] ?? 0);
+        $newStatus = (($_POST['status'] ?? '') === 'read') ? 'read' : 'unread';
+        if ($msgId > 0) {
+            try {
+                $stmt = $pdo->prepare("UPDATE contact_messages SET status = :status WHERE id = :id");
+                $stmt->execute([':status' => $newStatus, ':id' => $msgId]);
+                set_flash('success', "Message #{$msgId} marked as " . ucfirst($newStatus) . ".");
+            } catch (PDOException $e) {
+                set_flash('error', 'Failed to update message status: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php?tab=messages");
+        exit();
+    }
 }
 
 // =========================================================================
@@ -479,7 +533,9 @@ $totalReports = 0;
 $pendingReports = 0;
 $reviewedReports = 0;
 $ignoredReports = 0;
-$resolvedReports = 0;
+
+$totalMessages = 0;
+$unreadMessages = 0;
 
 $totalNotifications = 0;
 $categoryCounts = [];
@@ -498,8 +554,10 @@ try {
     $pendingReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Pending'")->fetchColumn();
     $reviewedReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Reviewed'")->fetchColumn();
     $ignoredReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Ignored'")->fetchColumn();
-    $resolvedReports = (int)$pdo->query("SELECT COUNT(*) FROM reports WHERE status = 'Resolved'")->fetchColumn();
     
+    $totalMessages = (int)$pdo->query("SELECT COUNT(*) FROM contact_messages")->fetchColumn();
+    $unreadMessages = (int)$pdo->query("SELECT COUNT(*) FROM contact_messages WHERE status = 'unread'")->fetchColumn();
+
     $totalNotifications = (int)$pdo->query("SELECT COUNT(*) FROM notifications")->fetchColumn();
     
     // Total money exchanged for items actually sold
@@ -529,6 +587,7 @@ try {
 $allListings = [];
 $allUsers = [];
 $allReports = [];
+$allMessages = [];
 
 try {
     if ($activeTab === 'listings') {
@@ -584,7 +643,7 @@ try {
         $repWhere = [];
         $repParams = [];
 
-        if (in_array($reportStatus, ['pending', 'reviewed', 'ignored', 'resolved'])) {
+        if (in_array($reportStatus, ['pending', 'reviewed', 'ignored'])) {
             $repWhere[] = "r.status = :rstatus";
             $repParams[':rstatus'] = ucfirst($reportStatus);
         }
@@ -610,6 +669,25 @@ try {
         ");
         $stmt->execute($repParams);
         $allReports = $stmt->fetchAll();
+    } elseif ($activeTab === 'messages') {
+        $msgWhere = [];
+        $msgParams = [];
+
+        if ($messageStatus === 'unread' || $messageStatus === 'read') {
+            $msgWhere[] = "status = :mstatus";
+            $msgParams[':mstatus'] = $messageStatus;
+        }
+
+        if (!empty($messageSearch)) {
+            $msgWhere[] = "(name LIKE :msearch OR email LIKE :msearch OR phone LIKE :msearch OR subject LIKE :msearch OR message LIKE :msearch)";
+            $msgParams[':msearch'] = "%{$messageSearch}%";
+        }
+
+        $msgWhereSql = !empty($msgWhere) ? "WHERE " . implode(" AND ", $msgWhere) : "";
+
+        $stmt = $pdo->prepare("SELECT * FROM contact_messages {$msgWhereSql} ORDER BY id DESC");
+        $stmt->execute($msgParams);
+        $allMessages = $stmt->fetchAll();
     }
 } catch (PDOException $e) {
     // Graceful error handle
@@ -698,6 +776,12 @@ require_once __DIR__ . '/includes/header.php';
             🚩 Safety Reports (<?= $totalReports ?>)
             <?php if ($pendingReports > 0): ?>
                 <span style="background: var(--danger); color: #fff; font-size: 0.7rem; padding: 2px 7px; border-radius: var(--radius-full); margin-left: 6px; font-weight: 800;"><?= $pendingReports ?> PENDING</span>
+            <?php endif; ?>
+        </a>
+        <a href="admin.php?tab=messages" class="btn <?= $activeTab === 'messages' ? 'btn-primary' : 'btn-outline' ?>" style="border-radius: var(--radius-sm); border-bottom-left-radius: 0; border-bottom-right-radius: 0; position: relative;">
+            ✉️ Inquiries &amp; Messages (<?= $totalMessages ?>)
+            <?php if ($unreadMessages > 0): ?>
+                <span style="background: var(--danger); color: #fff; font-size: 0.7rem; padding: 2px 7px; border-radius: var(--radius-full); margin-left: 6px; font-weight: 800;"><?= $unreadMessages ?> NEW</span>
             <?php endif; ?>
         </a>
     </div>
@@ -1121,10 +1205,6 @@ require_once __DIR__ . '/includes/header.php';
                        class="filter-pill <?= $reportStatus === 'ignored' ? 'active' : '' ?>">
                         ✓ Ignored (<?= $ignoredReports ?>)
                     </a>
-                    <a href="admin.php?tab=reports&report_status=resolved<?= !empty($reportSearch) ? '&report_search=' . urlencode($reportSearch) : '' ?>" 
-                       class="filter-pill <?= $reportStatus === 'resolved' ? 'active' : '' ?>">
-                        🗑️ Resolved (<?= $resolvedReports ?>)
-                    </a>
                 </div>
 
                 <?php if (!empty($reportSearch) || $reportStatus !== 'all'): ?>
@@ -1347,6 +1427,208 @@ require_once __DIR__ . '/includes/header.php';
                                                 ✓ Ignored
                                             </span>
                                         <?php endif; ?>
+
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+    <!-- =====================================================================
+         TAB 5: CONTACT MESSAGES & INQUIRIES
+         ===================================================================== -->
+    <?php elseif ($activeTab === 'messages'): ?>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.2rem;">Contact Inquiries &amp; Support Messages (<?= count($allMessages) ?>)</h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin: 0;">Messages and queries submitted through the campus Contact Us page</p>
+            </div>
+            
+            <?php if ($totalMessages > 0): ?>
+                <form method="POST" action="admin.php?tab=messages" style="display: inline;" onsubmit="return confirm('⚠️ Are you sure you want to permanently clear ALL contact messages? This action cannot be reversed.');">
+                    <input type="hidden" name="action" value="admin_clear_all_messages">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                    <button type="submit" class="btn btn-outline btn-sm" style="color: var(--danger); border-color: var(--danger); font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;" title="Permanently delete all contact messages">
+                        🗑️ Clear All Messages (<?= $totalMessages ?>)
+                    </button>
+                </form>
+            <?php endif; ?>
+        </div>
+
+        <!-- Filter & Search Controls for Messages -->
+        <div style="background: var(--bg-surface); padding: 1.15rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 0.9rem;">
+            
+            <!-- Row 1: Separate Status Pills -->
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                <div class="filter-pills">
+                    <a href="admin.php?tab=messages&msg_status=all<?= !empty($messageSearch) ? '&msg_search=' . urlencode($messageSearch) : '' ?>" 
+                       class="filter-pill <?= $messageStatus === 'all' ? 'active' : '' ?>">
+                        📬 All Messages (<?= $totalMessages ?>)
+                    </a>
+                    <a href="admin.php?tab=messages&msg_status=unread<?= !empty($messageSearch) ? '&msg_search=' . urlencode($messageSearch) : '' ?>" 
+                       class="filter-pill <?= $messageStatus === 'unread' ? 'active' : '' ?>" style="<?= $unreadMessages > 0 ? 'font-weight: 800;' : '' ?>">
+                        📩 Unread (<?= $unreadMessages ?>)
+                    </a>
+                    <a href="admin.php?tab=messages&msg_status=read<?= !empty($messageSearch) ? '&msg_search=' . urlencode($messageSearch) : '' ?>" 
+                       class="filter-pill <?= $messageStatus === 'read' ? 'active' : '' ?>">
+                        📖 Read (<?= max(0, $totalMessages - $unreadMessages) ?>)
+                    </a>
+                </div>
+
+                <?php if (!empty($messageSearch) || $messageStatus !== 'all'): ?>
+                    <a href="admin.php?tab=messages" class="btn btn-outline btn-sm" style="font-size: 0.8rem; padding: 0.35rem 0.75rem;">
+                        ↺ Reset Filters
+                    </a>
+                <?php endif; ?>
+            </div>
+
+            <!-- Row 2: Live Search Form -->
+            <form method="GET" action="admin.php" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <input type="hidden" name="tab" value="messages">
+                <input type="hidden" name="msg_status" value="<?= htmlspecialchars($messageStatus) ?>">
+                <div style="flex: 1; min-width: 260px;">
+                    <input type="text" name="msg_search" class="form-control" placeholder="Search by name, email, phone, subject, or message content..." value="<?= htmlspecialchars($messageSearch) ?>">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" style="display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
+                    🔍 Search Messages
+                </button>
+                <?php if (!empty($messageSearch)): ?>
+                    <a href="admin.php?tab=messages&msg_status=<?= htmlspecialchars($messageStatus) ?>" class="btn btn-outline btn-sm" style="white-space: nowrap;">
+                        Clear
+                    </a>
+                <?php endif; ?>
+            </form>
+
+            <?php if (!empty($messageSearch) || $messageStatus !== 'all'): ?>
+                <div style="font-size: 0.82rem; color: var(--text-muted);">
+                    Showing <strong><?= count($allMessages) ?></strong> message<?= count($allMessages) === 1 ? '' : 's' ?> 
+                    <?php if ($messageStatus !== 'all'): ?>
+                        filtered by status <strong><?= ucfirst($messageStatus) ?></strong>
+                    <?php endif; ?>
+                    <?php if (!empty($messageSearch)): ?>
+                        for keyword &ldquo;<em><?= htmlspecialchars($messageSearch) ?></em>&rdquo;
+                    <?php endif; ?>.
+                </div>
+            <?php endif; ?>
+
+        </div>
+
+        <div class="table-responsive">
+            <table class="custom-table responsive-card-table">
+                <thead>
+                    <tr>
+                        <th style="width: 70px;">ID</th>
+                        <th style="width: 110px;">Status</th>
+                        <th style="width: 200px;">Sender</th>
+                        <th>Subject &amp; Message</th>
+                        <th style="width: 140px;">Received</th>
+                        <th style="text-align: right; width: 200px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (empty($allMessages)): ?>
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 3rem 1rem; color: var(--text-muted);">
+                                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📭</div>
+                                <div style="font-weight: 700; font-size: 1.1rem; color: var(--text-primary); margin-bottom: 0.25rem;">
+                                    No contact messages found
+                                </div>
+                                <div style="font-size: 0.88rem;">
+                                    <?php if (!empty($messageSearch) || $messageStatus !== 'all'): ?>
+                                        Try adjusting your search query or status filter.
+                                    <?php else: ?>
+                                        Users and visitors haven't submitted any inquiries via the contact page yet.
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($allMessages as $msg): ?>
+                            <tr style="<?= $msg['status'] === 'unread' ? 'background: rgba(37, 99, 235, 0.04);' : '' ?>">
+                                <td data-label="ID">
+                                    <span style="font-weight: 700; color: var(--text-muted);">#<?= (int)$msg['id'] ?></span>
+                                </td>
+
+                                <td data-label="Status">
+                                    <?php if ($msg['status'] === 'unread'): ?>
+                                        <span style="display: inline-block; background: var(--danger-light, #fee2e2); color: var(--danger, #dc2626); font-size: 0.72rem; font-weight: 800; padding: 3px 8px; border-radius: var(--radius-full); text-transform: uppercase; letter-spacing: 0.5px;">
+                                            📩 UNREAD
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="display: inline-block; background: var(--bg-subtle); color: var(--text-muted); font-size: 0.72rem; font-weight: 700; padding: 3px 8px; border-radius: var(--radius-full); text-transform: uppercase;">
+                                            ✓ READ
+                                        </span>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td data-label="Sender">
+                                    <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 0.2rem;">
+                                        <?= htmlspecialchars($msg['name']) ?>
+                                    </div>
+                                    <div style="font-size: 0.82rem; margin-bottom: 0.2rem;">
+                                        <a href="mailto:<?= htmlspecialchars($msg['email']) ?>" style="color: var(--primary); text-decoration: none;">
+                                            ✉️ <?= htmlspecialchars($msg['email']) ?>
+                                        </a>
+                                    </div>
+                                    <?php if (!empty($msg['phone'])): ?>
+                                        <div style="font-size: 0.8rem; color: var(--text-muted);">
+                                            📞 <?= htmlspecialchars($msg['phone']) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td data-label="Subject &amp; Message">
+                                    <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.4rem;">
+                                        <?= htmlspecialchars($msg['subject']) ?>
+                                    </div>
+                                    <div style="font-size: 0.85rem; background: var(--bg-surface); padding: 0.7rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); color: var(--text-secondary); line-height: 1.45; white-space: pre-wrap; word-break: break-word;">
+                                        <?= htmlspecialchars($msg['message']) ?>
+                                    </div>
+                                </td>
+
+                                <td data-label="Received">
+                                    <span style="font-size: 0.82rem; color: var(--text-secondary); font-weight: 600; display: block;">
+                                        <?= date('M d, Y', strtotime($msg['created_at'])) ?>
+                                    </span>
+                                    <span style="font-size: 0.75rem; color: var(--text-muted);">
+                                        <?= date('h:i A', strtotime($msg['created_at'])) ?>
+                                    </span>
+                                </td>
+
+                                <td data-label="Actions" style="text-align: right;">
+                                    <div style="display: flex; gap: 0.4rem; justify-content: flex-end; flex-wrap: wrap;">
+                                        
+                                        <!-- Reply via Email -->
+                                        <a href="mailto:<?= htmlspecialchars($msg['email']) ?>?subject=<?= urlencode('Re: ' . $msg['subject'] . ' - UniThrift Helpdesk') ?>" 
+                                           class="btn btn-outline btn-sm" 
+                                           title="Reply directly via Email">
+                                            ✉️ Reply
+                                        </a>
+
+                                        <!-- Toggle Read/Unread -->
+                                        <form method="POST" action="admin.php?tab=messages" style="display: inline;">
+                                            <input type="hidden" name="action" value="admin_toggle_message_status">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                            <input type="hidden" name="message_id" value="<?= (int)$msg['id'] ?>">
+                                            <input type="hidden" name="status" value="<?= $msg['status'] === 'unread' ? 'read' : 'unread' ?>">
+                                            <button type="submit" class="btn btn-outline btn-sm" title="<?= $msg['status'] === 'unread' ? 'Mark message as read' : 'Mark message as unread' ?>">
+                                                <?= $msg['status'] === 'unread' ? '✓ Mark Read' : '↺ Mark Unread' ?>
+                                            </button>
+                                        </form>
+
+                                        <!-- Delete Message -->
+                                        <form method="POST" action="admin.php?tab=messages" style="display: inline;" onsubmit="return confirm('Delete this message permanently?');">
+                                            <input type="hidden" name="action" value="admin_delete_message">
+                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                            <input type="hidden" name="message_id" value="<?= (int)$msg['id'] ?>">
+                                            <button type="submit" class="btn btn-sm btn-outline" style="color: var(--danger); border-color: var(--danger);" title="Delete message">
+                                                🗑️
+                                            </button>
+                                        </form>
 
                                     </div>
                                 </td>

@@ -59,6 +59,7 @@ if ($currentUser && isset($pdo)) {
             <li><a href="index.php" class="<?= $currentPage === 'index.php' ? 'active' : '' ?>">Home</a></li>
             <li><a href="marketplace.php" class="<?= $currentPage === 'marketplace.php' ? 'active' : '' ?>">Marketplace</a></li>
             <li><a href="calculator.php" class="<?= $currentPage === 'calculator.php' ? 'active' : '' ?>">Calculator</a></li>
+            <li><a href="contact.php" class="<?= $currentPage === 'contact.php' ? 'active' : '' ?>">Contact</a></li>
             <?php if ($currentUser): ?>
                 <li><a href="my_listings.php" class="<?= $currentPage === 'my_listings.php' ? 'active' : '' ?>">My Listings</a></li>
                 <?php if (is_admin()): ?>
