@@ -120,6 +120,10 @@ try {
     $stmt = $pdo->query("SELECT category, COUNT(*) as count FROM items GROUP BY category");
     $categoryCounts = $stmt->fetchAll();
 
+    // Department participation
+    $stmt = $pdo->query("SELECT department, COUNT(*) as count FROM users GROUP BY department ORDER BY count DESC");
+    $deptCounts = $stmt->fetchAll();
+
 } catch (PDOException $e) {
     // Graceful error handle
 }
@@ -251,7 +255,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <div class="table-responsive">
-            <table class="custom-table">
+            <table class="custom-table responsive-card-table">
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -274,8 +278,8 @@ require_once __DIR__ . '/includes/header.php';
                     <?php else: ?>
                         <?php foreach ($allListings as $item): ?>
                             <tr>
-                                <td style="font-weight: 700; color: var(--text-muted);">#<?= (int)$item['id'] ?></td>
-                                <td>
+                                <td data-label="Listing ID" style="font-weight: 700; color: var(--text-muted);">#<?= (int)$item['id'] ?></td>
+                                <td data-label="Listing Details">
                                     <div style="display: flex; align-items: center; gap: 0.6rem;">
                                         <span style="font-size: 1.4rem;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
                                         <div>
@@ -288,21 +292,21 @@ require_once __DIR__ . '/includes/header.php';
                                         </div>
                                     </div>
                                 </td>
-                                <td>
+                                <td data-label="Student Seller">
                                     <div style="font-weight: 600; font-size: 0.88rem;"><?= htmlspecialchars($item['seller_name']) ?></div>
                                     <div style="font-size: 0.78rem; color: var(--text-muted);">ID: <?= htmlspecialchars($item['seller_sid']) ?></div>
                                     <div style="font-size: 0.78rem; color: var(--accent);"><?= htmlspecialchars($item['seller_phone']) ?></div>
                                 </td>
-                                <td>
+                                <td data-label="Category">
                                     <span class="card-badge-category" style="position: static; font-size: 0.72rem;"><?= htmlspecialchars($item['category']) ?></span>
                                 </td>
-                                <td>
+                                <td data-label="Resale Price">
                                     <strong style="color: var(--accent);"><?= format_price($item['selling_price']) ?></strong>
                                     <div style="font-size: 0.72rem; color: var(--text-muted); text-decoration: line-through;">
                                         <?= format_price($item['original_price']) ?>
                                     </div>
                                 </td>
-                                <td>
+                                <td data-label="Status">
                                     <form method="POST" action="admin.php" style="display: inline-block;">
                                         <input type="hidden" name="action" value="change_item_status">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
@@ -314,10 +318,10 @@ require_once __DIR__ . '/includes/header.php';
                                         </select>
                                     </form>
                                 </td>
-                                <td style="font-size: 0.8rem; color: var(--text-muted);">
+                                <td data-label="Date Posted" style="font-size: 0.8rem; color: var(--text-muted);">
                                     <?= date('M d, Y', strtotime($item['created_at'])) ?>
                                 </td>
-                                <td style="text-align: right;">
+                                <td data-label="Actions" style="text-align: right;">
                                     <form method="POST" action="admin.php" onsubmit="return confirm('Are you sure you want to permanently delete this listing from the marketplace as administrator?');" style="display: inline-block;">
                                         <input type="hidden" name="action" value="admin_delete_item">
                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
@@ -344,7 +348,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <div class="table-responsive">
-            <table class="custom-table">
+            <table class="custom-table responsive-card-table">
                 <thead>
                     <tr>
                         <th>Student ID</th>
@@ -360,10 +364,10 @@ require_once __DIR__ . '/includes/header.php';
                 <tbody>
                     <?php foreach ($allUsers as $u): ?>
                         <tr>
-                            <td>
+                            <td data-label="Student ID">
                                 <strong><?= htmlspecialchars($u['student_id']) ?></strong>
                             </td>
-                            <td>
+                            <td data-label="Name &amp; Dept">
                                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                                     <div class="user-avatar-sm" style="width: 28px; height: 28px; font-size: 0.75rem;">
                                         <?= strtoupper(substr($u['full_name'], 0, 1)) ?>
@@ -374,18 +378,18 @@ require_once __DIR__ . '/includes/header.php';
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Email">
                                 <a href="mailto:<?= htmlspecialchars($u['email']) ?>"><?= htmlspecialchars($u['email']) ?></a>
                             </td>
-                            <td>
+                            <td data-label="Mobile / WhatsApp">
                                 <strong><?= htmlspecialchars($u['phone']) ?></strong>
                             </td>
-                            <td>
+                            <td data-label="Listings">
                                 <span style="background: var(--bg-subtle); padding: 2px 8px; border-radius: var(--radius-full); font-size: 0.82rem; font-weight: 700;">
                                     <?= (int)$u['item_count'] ?> items
                                 </span>
                             </td>
-                            <td>
+                            <td data-label="Current Role">
                                 <?php if ($u['id'] == $_SESSION['user_id']): ?>
                                     <span style="font-size: 0.8rem; background: var(--warning); color: #000; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 800;">
                                         ADMIN (You)
@@ -402,10 +406,10 @@ require_once __DIR__ . '/includes/header.php';
                                     </form>
                                 <?php endif; ?>
                             </td>
-                            <td style="font-size: 0.8rem; color: var(--text-muted);">
+                            <td data-label="Joined Date" style="font-size: 0.8rem; color: var(--text-muted);">
                                 <?= date('M d, Y', strtotime($u['created_at'])) ?>
                             </td>
-                            <td style="text-align: right;">
+                            <td data-label="Actions" style="text-align: right;">
                                 <?php if ($u['id'] != $_SESSION['user_id']): ?>
                                     <form method="POST" action="admin.php?tab=users" onsubmit="return confirm('Delete user <?= htmlspecialchars(addslashes($u['full_name'])) ?>? This will delete all items posted by this student.');" style="display: inline-block;">
                                         <input type="hidden" name="action" value="admin_delete_user">
@@ -430,9 +434,9 @@ require_once __DIR__ . '/includes/header.php';
          ===================================================================== -->
     <?php elseif ($activeTab === 'analytics'): ?>
         
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2rem;">
             
-            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 2rem;">
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 2rem; box-shadow: var(--shadow-sm);">
                 <h3 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 1.25rem;">Marketplace Category Distribution</h3>
                 
                 <div style="display: flex; flex-direction: column; gap: 1rem;">
@@ -453,34 +457,24 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
             </div>
 
-            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 2rem;">
-                <h3 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 1.25rem;">Platform Health &amp; Environment</h3>
+            <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 2rem; box-shadow: var(--shadow-sm);">
+                <h3 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 1.25rem;">Student Department Participation</h3>
                 
-                <div style="display: flex; flex-direction: column; gap: 0.85rem; font-size: 0.92rem;">
-                    <div style="display: flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                        <span style="color: var(--text-secondary);">Database System:</span>
-                        <strong>MySQL (MariaDB) via PDO</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                        <span style="color: var(--text-secondary);">Active Database:</span>
-                        <code><?= DB_NAME ?></code>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                        <span style="color: var(--text-secondary);">Backend PHP Version:</span>
-                        <strong>PHP <?= PHP_VERSION ?></strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-color);">
-                        <span style="color: var(--text-secondary);">Security Protocol:</span>
-                        <strong>BCRYPT + PDO Prepared Stmts</strong>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; padding-bottom: 0.5rem;">
-                        <span style="color: var(--text-secondary);">Installer Script Status:</span>
-                        <span style="color: var(--accent); font-weight: 700;">Configured &amp; Active</span>
-                    </div>
-                </div>
-
-                <div style="margin-top: 2rem; padding: 1rem; background: var(--bg-subtle); border-radius: var(--radius-md); font-size: 0.85rem;">
-                    💡 <strong>Administrator Tip:</strong> You can review any student's posted listing or toggle its status directly from the Listings tab.
+                <div style="display: flex; flex-direction: column; gap: 1rem;">
+                    <?php foreach ($deptCounts as $dept): ?>
+                        <?php 
+                            $pct = $totalUsers > 0 ? round(($dept['count'] / $totalUsers) * 100) : 0; 
+                        ?>
+                        <div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.92rem; font-weight: 600; margin-bottom: 0.35rem;">
+                                <span>Department of <?= htmlspecialchars($dept['department']) ?></span>
+                                <span><?= (int)$dept['count'] ?> students (<?= $pct ?>%)</span>
+                            </div>
+                            <div style="width: 100%; height: 8px; background: var(--bg-subtle); border-radius: var(--radius-full); overflow: hidden;">
+                                <div style="width: <?= $pct ?>%; height: 100%; background: var(--accent); border-radius: var(--radius-full);"></div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
             </div>
 

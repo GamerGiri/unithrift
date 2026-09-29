@@ -56,15 +56,19 @@ Every semester, students purchase expensive course textbooks (e.g., Cormen Algor
 
 ---
 
-## 🗺️ The 5 Interconnected Pages
+## 🗺️ The Interconnected Pages (Exceeds Minimum 4-5 Page Requirement)
 
 | # | Page File | Route / Purpose |
 |---|---|---|
 | **1** | `index.php` | **Home / Landing Page:** Impact counter, category quick-jump cards, recent listings, and How-It-Works guide. |
-| **2** | `auth.php` | **Authentication:** Tabbed student login and registration with validation and password hashing. |
+| **2** | `auth.php` | **Authentication:** Tabbed student login and registration with validation and BCRYPT password hashing. |
 | **3** | `marketplace.php` | **Marketplace Catalogue:** Browsing hub with live search bar, category pills, condition filter, and sorting. |
-| **4** | `item_details.php` | **Item Details & Contact:** Full specifications, price comparison, discount percentage, and direct contact buttons. |
+| **4** | `item_details.php` | **Item Details & Contact:** Full specifications, price comparison, discount percentage, and direct WhatsApp/Call contact. |
 | **5** | `my_listings.php` | **Seller Studio (CRUD Hub):** Add new items, update prices, change status (Available/Reserved/Sold), and delete. |
+| **6** | `profile.php` | **Student Profile & Settings:** Verified student credentials with ability to update mobile/WhatsApp number. |
+| **7** | `calculator.php` | **Academic Savings Calculator (Page of Choice):** Interactive semester budget calculator with real-time savings. |
+| **8** | `admin.php` | **Administrator Command Center:** Full platform oversight, listing moderation, user roles, and category analytics. |
+| **9** | `install.php` | **Setup Wizard:** 1-click fresh database and demo account configuration. |
 
 ---
 

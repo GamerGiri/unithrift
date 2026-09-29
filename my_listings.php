@@ -257,7 +257,7 @@ require_once __DIR__ . '/includes/header.php';
                 </button>
             </div>
         <?php else: ?>
-            <table class="custom-table">
+            <table class="custom-table responsive-card-table">
                 <thead>
                     <tr>
                         <th>Item &amp; Category</th>
@@ -272,7 +272,7 @@ require_once __DIR__ . '/includes/header.php';
                 <tbody>
                     <?php foreach ($userListings as $item): ?>
                         <tr>
-                            <td>
+                            <td data-label="Item">
                                 <div style="display: flex; align-items: center; gap: 0.75rem;">
                                     <span style="font-size: 1.7rem;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
                                     <div>
@@ -285,17 +285,17 @@ require_once __DIR__ . '/includes/header.php';
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td data-label="Course">
                                 <?php if (!empty($item['course_code'])): ?>
                                     <span class="tag-course"><?= htmlspecialchars($item['course_code']) ?></span>
                                 <?php else: ?>
                                     <span style="color: var(--text-muted);">&mdash;</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Condition">
                                 <span class="tag-condition"><?= htmlspecialchars($item['item_condition']) ?></span>
                             </td>
-                            <td>
+                            <td data-label="Resale Price">
                                 <strong style="color: var(--accent); font-size: 1.05rem;">
                                     <?= format_price($item['selling_price']) ?>
                                 </strong>
@@ -305,7 +305,7 @@ require_once __DIR__ . '/includes/header.php';
                                     </div>
                                 <?php endif; ?>
                             </td>
-                            <td>
+                            <td data-label="Status">
                                 <form method="POST" action="my_listings.php" style="display: inline-block;">
                                     <input type="hidden" name="action" value="toggle_status">
                                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
@@ -317,10 +317,10 @@ require_once __DIR__ . '/includes/header.php';
                                     </select>
                                 </form>
                             </td>
-                            <td style="font-size: 0.82rem; color: var(--text-muted);">
+                            <td data-label="Date Posted" style="font-size: 0.82rem; color: var(--text-muted);">
                                 <?= date('M d, Y', strtotime($item['created_at'])) ?>
                             </td>
-                            <td style="text-align: right;">
+                            <td data-label="Actions" style="text-align: right;">
                                 <div style="display: flex; gap: 0.4rem; justify-content: flex-end;">
                                     <button type="button" class="btn btn-outline btn-sm" onclick='openEditModal(<?= json_encode($item, JSON_HEX_APOS | JSON_HEX_QUOT) ?>)'>
                                         ✏️ Edit

@@ -60,6 +60,9 @@ try {
             <a href="my_listings.php" class="btn btn-accent btn-lg">
                 ➕ Post an Item for Sale
             </a>
+            <a href="calculator.php" class="btn btn-outline btn-lg">
+                📊 Calculate Savings
+            </a>
         </div>
 
         <!-- Live Impact Statistics -->

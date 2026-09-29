@@ -1122,4 +1122,68 @@ a:hover {
     .form-row {
         grid-template-columns: 1fr;
     }
+
+    /* Mobile Responsive Card Table (Eliminates horizontal scrolling) */
+    .table-responsive {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        overflow-x: visible;
+    }
+
+    .responsive-card-table thead {
+        display: none;
+    }
+
+    .responsive-card-table,
+    .responsive-card-table tbody {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 100%;
+    }
+
+    .responsive-card-table tr {
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        box-shadow: var(--shadow-sm);
+        gap: 0.4rem;
+    }
+
+    .responsive-card-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.55rem 0;
+        border-bottom: 1px dashed var(--border-color);
+        text-align: right;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .responsive-card-table td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        text-align: left;
+        padding-right: 1rem;
+        flex-shrink: 0;
+    }
+
+    .responsive-card-table td:last-child {
+        border-bottom: none;
+        padding-top: 0.85rem;
+        margin-top: 0.35rem;
+        justify-content: flex-end;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .responsive-card-table td:last-child::before {
+        display: none;
+    }
 }
