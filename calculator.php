@@ -79,7 +79,7 @@ require_once __DIR__ . '/includes/header.php';
     </div>
 
     <!-- Main Calculator Layout (Interactive Columns) -->
-    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 2rem; align-items: flex-start;">
+    <div class="calc-layout-grid">
         
         <!-- Left Column: Item Selection Checklist & Search Bar -->
         <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.75rem 2rem; box-shadow: var(--shadow-sm);">
@@ -97,11 +97,11 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- Interactive Search & Filter Bar with Search Button -->
             <div style="background: var(--bg-surface); padding: 1rem 1.15rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
-                <div style="display: flex; gap: 0.6rem; flex-wrap: wrap;">
-                    <div style="flex: 2; min-width: 190px;">
+                <div class="calc-search-bar">
+                    <div>
                         <input type="text" id="calcSearchInput" class="form-control" placeholder="Search title, course code (e.g. CSE 311, MAT 101)..." onkeydown="if(event.key==='Enter') filterCalculatorItems();">
                     </div>
-                    <div style="flex: 1; min-width: 140px;">
+                    <div>
                         <select id="calcCategoryFilter" class="form-control" onchange="filterCalculatorItems()">
                             <option value="">All Categories</option>
                             <option value="Textbooks">📚 Textbooks</option>
@@ -111,14 +111,14 @@ require_once __DIR__ . '/includes/header.php';
                             <option value="Other">📦 Other Supplies</option>
                         </select>
                     </div>
-                    <button type="button" id="calcSearchBtn" class="btn btn-primary" onclick="filterCalculatorItems()" style="display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap;">
+                    <button type="button" id="calcSearchBtn" class="btn btn-primary" onclick="filterCalculatorItems()" style="display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; white-space: nowrap;">
                         🔍 Search
                     </button>
-                    <button type="button" id="calcResetBtn" class="btn btn-outline" onclick="resetCalculatorSearch()" style="white-space: nowrap;">
+                    <button type="button" id="calcResetBtn" class="btn btn-outline" onclick="resetCalculatorSearch()" style="white-space: nowrap; justify-content: center;">
                         Reset
                     </button>
                 </div>
-                <div id="calcSearchResultCount" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.45rem; display: none;"></div>
+                <div id="calcSearchResultCount" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.5rem; display: none;"></div>
             </div>
 
             <!-- Dynamic Category Groups -->
@@ -190,7 +190,7 @@ require_once __DIR__ . '/includes/header.php';
         </div>
 
         <!-- Right Column: Real-Time Financial Summary Card -->
-        <div style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.75rem 2rem; box-shadow: var(--shadow-lg); position: sticky; top: 90px;">
+        <div class="calc-sticky-card" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 1.75rem 2rem; box-shadow: var(--shadow-lg); position: sticky; top: 90px;">
             
             <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem;">
                 <span>💰</span> Your Semester Savings
@@ -209,7 +209,7 @@ require_once __DIR__ . '/includes/header.php';
                         <span style="font-size: 0.78rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Selected Items Breakdown:</span>
                         <span style="font-size: 0.72rem; color: var(--text-muted);">🔗 Click title to inspect</span>
                     </div>
-                    <div id="selectedItemsContainer" style="display: flex; flex-direction: column; gap: 0.45rem; max-height: 220px; overflow-y: auto; padding-right: 4px;">
+                    <div id="selectedItemsContainer" class="calc-selected-box">
                         <!-- Filled dynamically by JavaScript -->
                     </div>
                 </div>
@@ -302,7 +302,7 @@ function renderSelectedItemsList(checkedBoxes) {
 
     if (checkedBoxes.length === 0) {
         container.innerHTML = `
-            <div style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; text-align: center; padding: 0.75rem; background: var(--bg-subtle); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
+            <div style="font-size: 0.82rem; color: var(--text-muted); font-style: italic; text-align: center; padding: 1.25rem 0.75rem; background: var(--bg-card); border-radius: var(--radius-sm); border: 1px dashed var(--border-color);">
                 No items selected yet. Check items on the left to calculate your savings.
             </div>`;
         return;
@@ -317,16 +317,17 @@ function renderSelectedItemsList(checkedBoxes) {
         const sell = Math.round(parseFloat(cb.getAttribute('data-sell')) || 0).toLocaleString();
 
         html += `
-            <div class="selected-item-row" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.45rem 0.65rem; font-size: 0.82rem; gap: 0.5rem;">
-                <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
-                    <a href="${url}" target="_blank" style="font-weight: 700; color: var(--primary); text-decoration: none;" title="Open '${name}' in new tab">
-                        🔗 ${name}
+            <div class="calc-selected-row">
+                <div style="flex: 1; min-width: 0;">
+                    <a href="${url}" target="_blank" class="calc-selected-link" title="Open '${name}' in new tab">
+                        <span style="font-size: 0.8rem; margin-top: 1px;">🔗</span>
+                        <span>${name}</span>
                     </a>
-                    <span style="color: var(--text-muted); font-size: 0.74rem; display: block;">${course}</span>
+                    <span style="color: var(--text-muted); font-size: 0.75rem; display: block; margin-top: 2px;">${course}</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
-                    <span style="font-weight: 800; color: var(--accent);">৳ ${sell}</span>
-                    <button type="button" onclick="uncheckCalcItem('${id}')" style="background: none; border: none; color: var(--danger); font-size: 1.15rem; line-height: 1; cursor: pointer; padding: 0 2px;" title="Remove this item from calculation">&times;</button>
+                <div class="calc-selected-row-meta">
+                    <span style="font-weight: 800; color: var(--accent); font-size: 0.95rem;">৳ ${sell}</span>
+                    <button type="button" class="calc-selected-remove-btn" onclick="uncheckCalcItem('${id}')" aria-label="Remove ${name}" title="Remove this item from calculation">&times;</button>
                 </div>
             </div>
         `;
