@@ -125,7 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 450.00,
                         'description'     => 'Standard algorithms textbook required for CSE 311. Includes clean pages, all key chapter markers intact, and zero pencil marks on exercise sections.',
                         'meetup_location' => 'SEU Main Cafeteria or Library Ground Floor',
-                        'image_icon'      => '📚'
+                        'image_icon'      => '📚',
+                        'image_url'       => 'assets/uploads/clrs_algorithms.jpg'
                     ],
                     [
                         'title'           => 'Arduino Uno R3 + Sensor Starter Kit (16 Sensors + Cables)',
@@ -136,7 +137,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 1250.00,
                         'description'     => 'Complete kit used for Microprocessor & Interfacing lab. Contains Arduino Uno microcontroller board, ultrasonic sensor, IR sensor, servo motor, and 65x jumper wires.',
                         'meetup_location' => 'CSE Hardware Lab 4, 5th Floor',
-                        'image_icon'      => '🔬'
+                        'image_icon'      => '🔬',
+                        'image_url'       => 'assets/uploads/arduino_kit.jpg'
                     ],
                     [
                         'title'           => 'Casio fx-991EX ClassWiz Scientific Calculator (Original)',
@@ -147,7 +149,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 1100.00,
                         'description'     => 'Original natural textbook display scientific calculator with 552 functions, matrix calculation, vector and quadratic solvers. Dual solar and battery power.',
                         'meetup_location' => 'Campus Reception Lobby',
-                        'image_icon'      => '🔢'
+                        'image_icon'      => '🔢',
+                        'image_url'       => 'assets/uploads/casio_calculator.jpg'
                     ],
                     [
                         'title'           => 'Rotring Engineering Drawing Board (A2 Size) + T-Square & Set Squares',
@@ -158,7 +161,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 1300.00,
                         'description'     => 'Complete Engineering Graphics drafting board set with parallel motion ruler, 45/90 degree set squares, and clip locks. Essential for 1st-year engineering graphics.',
                         'meetup_location' => 'Architecture Dept Studio or Main Gate',
-                        'image_icon'      => '📐'
+                        'image_icon'      => '📐',
+                        'image_url'       => 'assets/uploads/drawing_tools.jpg'
                     ],
                     [
                         'title'           => 'Digital Multimeter DT-830D + Test Leads & 9V Battery',
@@ -169,7 +173,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 300.00,
                         'description'     => 'Compact digital multimeter for measuring AC/DC voltage, DC current, and resistance. Used in Basic Electrical Engineering Lab. Tested and working 100%.',
                         'meetup_location' => 'EEE Lab 2, 4th Floor',
-                        'image_icon'      => '⚡'
+                        'image_icon'      => '⚡',
+                        'image_url'       => 'assets/uploads/multimeter.jpg'
                     ],
                     [
                         'title'           => 'Database System Concepts (Silberschatz, Korth 7th Edition)',
@@ -180,7 +185,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 380.00,
                         'description'     => 'Must-have book for Database Management Systems. Covers relational algebra, SQL optimization, transaction management, and indexing in depth.',
                         'meetup_location' => 'Study Zone, 3rd Floor',
-                        'image_icon'      => '📖'
+                        'image_icon'      => '📖',
+                        'image_url'       => 'assets/uploads/db_textbook.jpg'
                     ],
                     [
                         'title'           => 'Solderless Breadboard (830 Tie Points) + 4x IC 7400/7408/7432 Chips',
@@ -191,7 +197,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 200.00,
                         'description'     => 'Digital Logic Design lab essentials. Includes standard full-size breadboard with power rails and 4 basic logic gate ICs. Ideal for DLD experiments.',
                         'meetup_location' => 'Main Gate or Canteen',
-                        'image_icon'      => '💡'
+                        'image_icon'      => '💡',
+                        'image_url'       => 'assets/uploads/breadboard_ic.jpg'
                     ],
                     [
                         'title'           => 'USB 3.0 to Gigabit Ethernet Adapter (Aluminium Body)',
@@ -202,15 +209,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         'selling_price'   => 650.00,
                         'description'     => 'High-speed network adapter used in Computer Networks lab to connect thin laptops lacking RJ45 ports to campus LAN switch configurations.',
                         'meetup_location' => 'CSE Computer Lab 6',
-                        'image_icon'      => '💻'
+                        'image_icon'      => '💻',
+                        'image_url'       => 'assets/uploads/ethernet_adapter.jpg'
                     ]
                 ];
 
                 $itemStmt = $rootPdo->prepare("
                     INSERT INTO `items` 
-                    (`user_id`, `title`, `category`, `course_code`, `item_condition`, `original_price`, `selling_price`, `description`, `meetup_location`, `image_icon`, `status`)
+                    (`user_id`, `title`, `category`, `course_code`, `item_condition`, `original_price`, `selling_price`, `description`, `meetup_location`, `image_icon`, `image_url`, `status`)
                     VALUES 
-                    (:user_id, :title, :category, :course_code, :item_condition, :original_price, :selling_price, :description, :meetup_location, :image_icon, 'Available')
+                    (:user_id, :title, :category, :course_code, :item_condition, :original_price, :selling_price, :description, :meetup_location, :image_icon, :image_url, 'Available')
                 ");
 
                 foreach ($sampleItems as $item) {
@@ -224,7 +232,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         ':selling_price'   => $item['selling_price'],
                         ':description'     => $item['description'],
                         ':meetup_location' => $item['meetup_location'],
-                        ':image_icon'      => $item['image_icon']
+                        ':image_icon'      => $item['image_icon'],
+                        ':image_url'       => $item['image_url']
                     ]);
                 }
             }

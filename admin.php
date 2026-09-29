@@ -296,8 +296,9 @@ require_once __DIR__ . '/includes/header.php';
                                 <td data-label="Listing ID" style="font-weight: 700; color: var(--text-muted);">#<?= (int)$item['id'] ?></td>
                                 <td data-label="Listing Details">
                                     <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                        <?php if (!empty($item['image_url']) && file_exists(__DIR__ . '/' . $item['image_url'])): ?>
-                                            <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="Photo" style="width: 44px; height: 44px; border-radius: var(--radius-sm); object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;">
+                                        <?php $imgSrc = get_item_image($item['image_url'] ?? null); ?>
+                                        <?php if ($imgSrc): ?>
+                                            <img src="<?= htmlspecialchars($imgSrc) ?>" alt="Photo" style="width: 44px; height: 44px; border-radius: var(--radius-sm); object-fit: cover; border: 1px solid var(--border-color); flex-shrink: 0;">
                                         <?php else: ?>
                                             <span style="font-size: 1.6rem; flex-shrink: 0;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
                                         <?php endif; ?>

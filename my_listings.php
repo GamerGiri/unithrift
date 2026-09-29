@@ -197,6 +197,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_flash('error', 'Update failed: ' . $e->getMessage());
             }
         }
+    }
+
     // ==========================================
     // 3. QUICK STATUS TOGGLE
     // ==========================================
@@ -335,8 +337,9 @@ require_once __DIR__ . '/includes/header.php';
                         <tr>
                             <td data-label="Item">
                                 <div style="display: flex; align-items: center; gap: 0.75rem;">
-                                    <?php if (!empty($item['image_url']) && file_exists(__DIR__ . '/' . $item['image_url'])): ?>
-                                        <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="Photo" style="width: 46px; height: 46px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-color); flex-shrink: 0;">
+                                    <?php $imgSrc = get_item_image($item['image_url'] ?? null); ?>
+                                    <?php if ($imgSrc): ?>
+                                        <img src="<?= htmlspecialchars($imgSrc) ?>" alt="Photo" style="width: 46px; height: 46px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-color); flex-shrink: 0;">
                                     <?php else: ?>
                                         <span style="font-size: 1.7rem; flex-shrink: 0;"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
                                     <?php endif; ?>

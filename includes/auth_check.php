@@ -64,6 +64,20 @@ function calc_discount_pct($original, $selling): int {
     return (int)round((($orig - $sell) / $orig) * 100);
 }
 
+function get_item_image(?string $imageUrl): ?string {
+    if (empty($imageUrl)) {
+        return null;
+    }
+    if (str_starts_with($imageUrl, 'http://') || str_starts_with($imageUrl, 'https://')) {
+        return $imageUrl;
+    }
+    $cleanPath = ltrim($imageUrl, '/\\');
+    if (file_exists(__DIR__ . '/../' . $cleanPath) || file_exists(__DIR__ . '/' . $cleanPath)) {
+        return $imageUrl;
+    }
+    return null;
+}
+
 // Generate or get CSRF token
 function get_csrf_token(): string {
     if (empty($_SESSION['csrf_token'])) {

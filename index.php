@@ -160,8 +160,9 @@ try {
                     ?>
                     <div class="item-card">
                         <div class="card-img-wrap">
-                            <?php if (!empty($item['image_url']) && file_exists(__DIR__ . '/' . $item['image_url'])): ?>
-                                <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="<?= htmlspecialchars($item['title']) ?>" class="card-img-real">
+                            <?php $imgSrc = get_item_image($item['image_url'] ?? null); ?>
+                            <?php if ($imgSrc): ?>
+                                <img src="<?= htmlspecialchars($imgSrc) ?>" alt="<?= htmlspecialchars($item['title']) ?>" class="card-img-real">
                             <?php else: ?>
                                 <span class="card-img-placeholder"><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
                             <?php endif; ?>

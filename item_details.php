@@ -83,8 +83,9 @@ $isOwner = ($currentUser && $currentUser['id'] == $item['user_id']);
         <!-- Left: Image Preview Box -->
         <div style="display: flex; flex-direction: column; gap: 1rem;">
             <div class="detail-img-box" style="overflow: hidden; padding: 0;">
-                <?php if (!empty($item['image_url']) && file_exists(__DIR__ . '/' . $item['image_url'])): ?>
-                    <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="<?= htmlspecialchars($item['title']) ?>" style="width: 100%; height: 100%; min-height: 380px; max-height: 480px; object-fit: contain; background: var(--bg-subtle);">
+                <?php $imgSrc = get_item_image($item['image_url'] ?? null); ?>
+                <?php if ($imgSrc): ?>
+                    <img src="<?= htmlspecialchars($imgSrc) ?>" alt="<?= htmlspecialchars($item['title']) ?>" style="width: 100%; height: 100%; min-height: 380px; max-height: 480px; object-fit: contain; background: var(--bg-subtle);">
                 <?php else: ?>
                     <span><?= htmlspecialchars($item['image_icon'] ?? '📦') ?></span>
                 <?php endif; ?>
