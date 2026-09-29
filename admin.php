@@ -188,6 +188,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
+    // D2. Admin Provision User (Allows Any Email, including non-seu.edu.bd)
+    elseif ($action === 'admin_create_user') {
+        $studentId  = trim($_POST['student_id'] ?? '');
+        $fullName   = trim($_POST['full_name'] ?? '');
+        $email      = trim($_POST['email'] ?? '');
+        $phone      = trim($_POST['phone'] ?? '');
+        $department = trim($_POST['department'] ?? 'General');
+        $role       = in_array($_POST['role'] ?? '', ['student', 'admin']) ? $_POST['role'] : 'student';
+        $password   = $_POST['password'] ?? '';
+
+        if (empty($studentId) || empty($fullName) || empty($email) || empty($phone) || empty($password)) {
+            set_flash('error', 'All fields are required to provision an account.');
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            set_flash('error', 'Please enter a valid email address.');
+        } elseif (strlen($password) < 6) {
+            set_flash('error', 'Password must be at least 6 characters long.');
+        } else {
+            try {
+                $chk = $pdo->prepare("SELECT id FROM users WHERE email = :email OR student_id = :sid LIMIT 1");
+                $chk->execute([':email' => $email, ':sid' => $studentId]);
+                if ($chk->fetch()) {
+                    set_flash('error', "A user with Student ID '{$studentId}' or email '{$email}' already exists.");
+                } else {
+                    $hashed = password_hash($password, PASSWORD_BCRYPT);
+                    $ins = $pdo->prepare("
+                        INSERT INTO users (student_id, full_name, email, phone, department, role, password_hash)
+                        VALUES (:sid, :name, :email, :phone, :dept, :role, :hash)
+                    ");
+                    $ins->execute([
+                        ':sid'   => $studentId,
+                        ':name'  => $fullName,
+                        ':email' => $email,
+                        ':phone' => $phone,
+                        ':dept'  => $department,
+                        ':role'  => $role,
+                        ':hash'  => $hashed
+                    ]);
+
+                    $newUid = $pdo->lastInsertId();
+
+                    // Optional welcome notification
+                    $welcomeStmt = $pdo->prepare("
+                        INSERT INTO notifications (user_id, title, message)
+                        VALUES (:uid, 'Account Provisioned by Administrator', 'Welcome to UniThrift. Your verified account was provisioned with special access by campus administration.')
+                    ");
+                    $welcomeStmt->execute([':uid' => $newUid]);
+
+                    set_flash('success', "User account for '{$fullName}' ({$email}) successfully created with {$role} privileges.");
+                }
+            } catch (PDOException $e) {
+                set_flash('error', 'Failed to create user account: ' . $e->getMessage());
+            }
+        }
+        header("Location: admin.php?tab=users");
+        exit();
+    }
+
     // E. Moderation: Remove Reported Listing
     elseif ($action === 'remove_reported_listing') {
         $reportId = (int)($_POST['report_id'] ?? 0);
@@ -595,8 +652,14 @@ require_once __DIR__ . '/includes/header.php';
          ===================================================================== -->
     <?php elseif ($activeTab === 'users'): ?>
         
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-            <h2 style="font-size: 1.3rem; font-weight: 800;">Registered Students &amp; Administrators (<?= count($allUsers) ?>)</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 1rem;">
+            <div>
+                <h2 style="font-size: 1.3rem; font-weight: 800; margin-bottom: 0.25rem;">Registered Students &amp; Administrators (<?= count($allUsers) ?>)</h2>
+                <p style="color: var(--text-secondary); font-size: 0.88rem; margin: 0;">Public student signup requires @seu.edu.bd. Administrators have privilege to provision verified accounts with any email address (e.g. Gmail, external researchers).</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" onclick="openModal('adminAddUserModal')">
+                ➕ Add User (Any Email)
+            </button>
         </div>
 
         <div class="table-responsive">
@@ -632,6 +695,13 @@ require_once __DIR__ . '/includes/header.php';
                             </td>
                             <td data-label="Email">
                                 <a href="mailto:<?= htmlspecialchars($u['email']) ?>"><?= htmlspecialchars($u['email']) ?></a>
+                                <?php 
+                                    $uEmailLower = strtolower($u['email']);
+                                    $isSeu = str_ends_with($uEmailLower, '@seu.edu.bd') || str_ends_with($uEmailLower, '.seu.edu.bd');
+                                ?>
+                                <?php if (!$isSeu): ?>
+                                    <span style="display: inline-block; background: var(--accent-light); color: var(--accent); font-size: 0.68rem; padding: 1px 6px; border-radius: var(--radius-full); margin-left: 4px; font-weight: 800;" title="Provisioned by Admin outside @seu.edu.bd">NON-SEU</span>
+                                <?php endif; ?>
                             </td>
                             <td data-label="Mobile / WhatsApp">
                                 <strong><?= htmlspecialchars($u['phone']) ?></strong>
@@ -1109,6 +1179,83 @@ function openNotifySellerModal(reportId, sellerId, sellerName, itemId, itemTitle
 
             <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.5rem;">
                 📨 Deliver Administrative Notice
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- Admin Provision User Modal (Allows Any Email) -->
+<div class="modal-overlay" id="adminAddUserModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">➕ Add User Account (Admin Authorization)</h2>
+            <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
+        </div>
+
+        <form method="POST" action="admin.php?tab=users" id="adminAddUserForm">
+            <input type="hidden" name="action" value="admin_create_user">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+
+            <div style="background: var(--bg-surface); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1.25rem; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4;">
+                🛡️ <strong>Admin Privilege:</strong> While standard student self-registration is strictly restricted to official <code>@seu.edu.bd</code> emails, administrators can provision verified accounts with <strong>any email domain</strong> (e.g., Gmail, Yahoo, guest faculty, inter-university partners).
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Student / University ID *</label>
+                    <input type="text" name="student_id" class="form-control" placeholder="e.g. 2021100000888 or EXT-101" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Full Name *</label>
+                    <input type="text" name="full_name" class="form-control" placeholder="e.g. Dr. John Doe or Jane Smith" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Email Address (Any Domain Permitted) *</label>
+                <input type="email" name="email" class="form-control" placeholder="e.g. scholar@gmail.com or student@seu.edu.bd" required>
+                <small style="color: var(--text-muted); font-size: 0.78rem;">You may enter non-SEU emails (e.g. Gmail) or standard SEU emails here.</small>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Department *</label>
+                    <select name="department" class="form-control" required>
+                        <option value="CSE">CSE</option>
+                        <option value="EEE">EEE</option>
+                        <option value="Architecture">Architecture</option>
+                        <option value="BBA">BBA</option>
+                        <option value="Pharmacy">Pharmacy</option>
+                        <option value="English">English</option>
+                        <option value="Law">Law</option>
+                        <option value="General">General / External</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Role *</label>
+                    <select name="role" class="form-control" required>
+                        <option value="student">Student / Regular User</option>
+                        <option value="admin">Administrator</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Phone / WhatsApp Number *</label>
+                    <input type="tel" name="phone" class="form-control" placeholder="01700000000" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Initial Password *</label>
+                    <input type="password" name="password" class="form-control" placeholder="Min. 6 characters" required>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%; margin-top: 0.75rem;">
+                💾 Provision &amp; Activate Account
             </button>
         </form>
     </div>

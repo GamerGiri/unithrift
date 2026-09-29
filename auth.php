@@ -68,11 +68,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $password   = $_POST['password'] ?? '';
     $confirmPass = $_POST['confirm_password'] ?? '';
 
+    // Extract email domain
+    $emailLower = strtolower($email);
+    $emailDomain = substr(strrchr($emailLower, "@"), 1) ?: '';
+
     // Validation
     if (empty($fullName) || empty($studentId) || empty($email) || empty($phone) || empty($password)) {
         $registerError = "All required fields must be filled.";
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $registerError = "Please provide a valid university email address.";
+    } elseif ($emailDomain !== 'seu.edu.bd' && !str_ends_with($emailDomain, '.seu.edu.bd')) {
+        $registerError = "Public registration is strictly restricted to Southeast University emails (@seu.edu.bd). Non-SEU accounts can only be provisioned by the Administrator.";
     } elseif (strlen($password) < 6) {
         $registerError = "Password must be at least 6 characters long.";
     } elseif ($password !== $confirmPass) {
@@ -222,8 +228,9 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">University Email *</label>
-                    <input type="email" name="email" class="form-control" placeholder="student@seu.edu.bd" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" required>
+                    <label class="form-label">University Email (@seu.edu.bd only) *</label>
+                    <input type="email" name="email" class="form-control" placeholder="your.name@seu.edu.bd" value="<?= htmlspecialchars($_POST['email'] ?? '') ?>" pattern="^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9.-]+\.)?seu\.edu\.bd$" title="Please enter your official @seu.edu.bd university email" required>
+                    <small style="color: var(--text-muted); font-size: 0.78rem;">Public registration requires an official Southeast University email ending with <strong>@seu.edu.bd</strong>.</small>
                 </div>
 
                 <div class="form-group">

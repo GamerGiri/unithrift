@@ -15,8 +15,8 @@ try {
         $stmt = $pdo->query("SELECT COUNT(*) FROM items WHERE status = 'Available'");
         $totalItems = (int)$stmt->fetchColumn();
 
-        // Estimated student savings
-        $stmt = $pdo->query("SELECT SUM(original_price - selling_price) FROM items WHERE original_price > selling_price");
+        // Estimated student savings based strictly on items sold
+        $stmt = $pdo->query("SELECT COALESCE(SUM(original_price - selling_price), 0) FROM items WHERE status = 'Sold' AND original_price > selling_price");
         $totalSavings = (float)$stmt->fetchColumn();
 
         // Total registered students
@@ -75,7 +75,7 @@ try {
             <div class="stat-card">
                 <div class="stat-icon">💰</div>
                 <div class="stat-value"><?= APP_CURRENCY ?> <?= number_format($totalSavings) ?></div>
-                <div class="stat-label">Estimated Student Savings</div>
+                <div class="stat-label">Realized Savings (Sold Items)</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon">👥</div>
