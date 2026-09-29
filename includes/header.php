@@ -53,6 +53,18 @@ $flash = get_flash();
                         My Listings &amp; Sell
                     </a>
                 </li>
+                <li>
+                    <a href="profile.php" class="<?= $currentPage === 'profile.php' ? 'active' : '' ?>">
+                        Profile
+                    </a>
+                </li>
+                <?php if (is_admin()): ?>
+                    <li>
+                        <a href="admin.php" class="<?= $currentPage === 'admin.php' ? 'active' : '' ?>" style="color: var(--warning); font-weight: 700;">
+                            🛡️ Admin Panel
+                        </a>
+                    </li>
+                <?php endif; ?>
             <?php endif; ?>
         </ul>
 
@@ -63,12 +75,15 @@ $flash = get_flash();
             </button>
 
             <?php if ($currentUser): ?>
-                <div class="user-menu-pill">
+                <a href="profile.php" class="user-menu-pill" title="View Profile &amp; Update Mobile Number" style="text-decoration: none; color: inherit;">
                     <span class="user-avatar-sm">
                         <?= strtoupper(substr($currentUser['full_name'], 0, 1)) ?>
                     </span>
                     <span><?= htmlspecialchars(explode(' ', $currentUser['full_name'])[0]) ?></span>
-                </div>
+                    <?php if (is_admin()): ?>
+                        <span style="font-size: 0.65rem; background: var(--warning); color: #000; padding: 1px 5px; border-radius: var(--radius-full); font-weight: 800;">ADMIN</span>
+                    <?php endif; ?>
+                </a>
                 <a href="logout.php" class="btn btn-outline btn-sm" title="Log Out">
                     Log Out
                 </a>

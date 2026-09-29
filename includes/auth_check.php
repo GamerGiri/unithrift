@@ -78,3 +78,16 @@ function verify_csrf_token(?string $token): bool {
     }
     return hash_equals($_SESSION['csrf_token'], $token);
 }
+
+function is_admin(): bool {
+    return is_logged_in() && (($_SESSION['role'] ?? '') === 'admin');
+}
+
+function require_admin(string $redirect = 'index.php'): void {
+    require_login();
+    if (!is_admin()) {
+        set_flash('error', 'Access denied. Administrator privileges required.');
+        header("Location: $redirect");
+        exit();
+    }
+}

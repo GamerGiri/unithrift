@@ -26,19 +26,19 @@
             </div>
 
             <div class="footer-col">
-                <h4>Academic Project</h4>
+                <h4>Safety &amp; Community</h4>
                 <ul>
-                    <li><strong>Course:</strong> CSE 472</li>
-                    <li><strong>Title:</strong> Web &amp; Internet Programming</li>
-                    <li><strong>Institution:</strong> Southeast University</li>
-                    <li><strong>Stack:</strong> PHP 8, MySQL, HTML5, CSS3, JS</li>
+                    <li><a href="index.php#how-it-works">Campus Handover Guide</a></li>
+                    <li><a href="marketplace.php">Verified Student Deals</a></li>
+                    <li><a href="profile.php">Account &amp; Security</a></li>
+                    <li><a href="marketplace.php?category=Textbooks">Academic ReUse Hub</a></li>
                 </ul>
             </div>
         </div>
 
         <div class="footer-bottom">
-            <span>&copy; <?= date('Y') ?> <?= APP_NAME ?> - Southeast University Department of CSE.</span>
-            <span>Secure Student ReUse Platform</span>
+            <span>&copy; <?= date('Y') ?> <?= APP_NAME ?>. Empowering students through sustainable campus academic reuse.</span>
+            <span>Zero Waste &bull; Safe Peer Exchange</span>
         </div>
     </div>
 </footer>
