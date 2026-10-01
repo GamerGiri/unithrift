@@ -45,8 +45,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 $_SESSION['department'] = $user['department'];
                 $_SESSION['role']       = $user['role'];
 
+                $redirectUrl = !empty($_REQUEST['redirect']) ? trim($_REQUEST['redirect']) : 'marketplace.php';
+                // Sanitize redirect: only allow relative URLs without scheme or double slashes
+                if (str_starts_with($redirectUrl, '/') || str_contains($redirectUrl, '://') || str_starts_with($redirectUrl, '\\')) {
+                    $redirectUrl = 'marketplace.php';
+                }
+
                 set_flash('success', "Welcome back, {$user['full_name']}!");
-                header("Location: marketplace.php");
+                header("Location: {$redirectUrl}");
                 exit();
             } else {
                 $loginError = "Invalid credentials. Please check your email/ID and password.";
@@ -162,6 +168,9 @@ require_once __DIR__ . '/includes/header.php';
 
             <form method="POST" action="auth.php?tab=login">
                 <input type="hidden" name="action" value="login">
+                <?php if (!empty($_REQUEST['redirect'])): ?>
+                    <input type="hidden" name="redirect" value="<?= htmlspecialchars($_REQUEST['redirect']) ?>">
+                <?php endif; ?>
 
                 <div class="form-group">
                     <label class="form-label">University Email or Student ID *</label>

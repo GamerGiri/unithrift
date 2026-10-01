@@ -474,7 +474,7 @@ require_once __DIR__ . '/includes/header.php';
 <div class="modal-overlay" id="createItemModal">
     <div class="modal-content">
         <div class="modal-header">
-            <h2 class="modal-title">➕ Post New Academic Gear</h2>
+            <h2 class="modal-title">➕ Add New Product</h2>
             <button type="button" class="modal-close-btn" data-close-modal>&times;</button>
         </div>
 

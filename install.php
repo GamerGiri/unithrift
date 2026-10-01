@@ -44,22 +44,43 @@ $inputAdminPhone  = trim($_POST['admin_phone'] ?? '01711223344');
 $inputAdminPass   = $_POST['admin_pass'] ?? 'admin123';
 $inputSeedSamples = isset($_POST['seed_samples']) || ($_SERVER['REQUEST_METHOD'] !== 'POST');
 
-// Check current installation status (unless user explicitly requests reconfigure)
-if (!isset($_GET['reconfigure']) && $_SERVER['REQUEST_METHOD'] !== 'POST') {
-    try {
-        $testPdo = new PDO("mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_TIMEOUT => 3
-        ]);
-        $hasUsers = $testPdo->query("SHOW TABLES LIKE 'users'")->fetch();
-        $hasItems = $testPdo->query("SHOW TABLES LIKE 'items'")->fetch();
-        if ($hasUsers && $hasItems) {
-            $alreadyInstalled = true;
+// Check if system is currently installed (database connects, schema tables exist, and at least one admin account exists)
+$isSystemInstalled = false;
+try {
+    $checkPdo = new PDO("mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS, [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_TIMEOUT => 3
+    ]);
+    $hasUsers = $checkPdo->query("SHOW TABLES LIKE 'users'")->fetch();
+    $hasItems = $checkPdo->query("SHOW TABLES LIKE 'items'")->fetch();
+    if ($hasUsers && $hasItems) {
+        $adminCount = (int)$checkPdo->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
+        if ($adminCount > 0) {
+            $isSystemInstalled = true;
         }
-    } catch (PDOException $e) {
-        $initialConnError = $e->getMessage();
+    }
+} catch (PDOException $e) {
+    $initialConnError = $e->getMessage();
+    $isSystemInstalled = false;
+}
+
+// SECURITY ENFORCEMENT:
+// Once the system is installed, only an authenticated administrator can access or reconfigure install.php!
+if ($isSystemInstalled) {
+    if (!is_logged_in()) {
+        set_flash('error', 'The system is already installed. Only administrators can access system setup or reconfiguration. Please sign in as an admin.');
+        header('Location: auth.php?redirect=' . urlencode('install.php?reconfigure=1'));
+        exit();
+    }
+
+    if (!is_admin()) {
+        set_flash('error', 'Access denied. You must have administrator privileges to access or reconfigure the installation wizard.');
+        header('Location: index.php');
+        exit();
     }
 }
+
+$alreadyInstalled = $isSystemInstalled;
 
 // Handle Installation POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'install') {
@@ -520,29 +541,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     <span>✅ <?= htmlspecialchars($success) ?></span>
                 </div>
                 <div style="text-align: center; margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
-                    <a href="auth.php" class="btn btn-primary btn-lg" style="width: 100%;">
-                        🔑 Proceed to Login
-                    </a>
-                    <a href="index.php" class="btn btn-outline" style="width: 100%;">
-                        🏪 Browse Marketplace as Guest
+                    <?php if (is_admin()): ?>
+                        <a href="admin.php" class="btn btn-primary btn-lg" style="width: 100%;">
+                            🛡️ Open Administrator Command Center
+                        </a>
+                    <?php else: ?>
+                        <a href="auth.php" class="btn btn-primary btn-lg" style="width: 100%;">
+                            🔑 Proceed to Login
+                        </a>
+                    <?php endif; ?>
+                    <a href="marketplace.php" class="btn btn-outline" style="width: 100%;">
+                        🏪 Browse Marketplace
                     </a>
                 </div>
 
             <?php elseif ($alreadyInstalled && !isset($_GET['reconfigure'])): ?>
                 <div class="alert alert-info">
-                    <span>ℹ️ Database is already configured (<code><?= htmlspecialchars(DB_NAME) ?></code>) and schema tables are ready!</span>
+                    <span>🛡️ <strong>Administrator Mode:</strong> Database is already configured (<code><?= htmlspecialchars(DB_NAME) ?></code>) and schema tables are operational.</span>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem;">
-                    <a href="index.php" class="btn btn-primary btn-lg">🚀 Launch <?= APP_NAME ?></a>
-                    <a href="auth.php" class="btn btn-outline">🔑 Sign In to Your Account</a>
+                    <a href="admin.php" class="btn btn-primary btn-lg">🛡️ Open Administrator Command Center</a>
+                    <a href="marketplace.php" class="btn btn-outline">🏪 Browse Marketplace</a>
                     <div style="text-align: center; margin-top: 0.75rem;">
-                        <a href="install.php?reconfigure=1" style="font-size: 0.85rem; color: var(--text-muted); text-decoration: underline;">
-                            ⚙️ Need to reconnect or change database? Reconfigure Setup
+                        <a href="install.php?reconfigure=1" class="btn btn-outline btn-sm" style="font-size: 0.85rem; font-weight: 700;">
+                            ⚙️ Reconfigure Database &amp; System Settings
                         </a>
                     </div>
                 </div>
 
             <?php else: ?>
+                <?php if ($alreadyInstalled): ?>
+                    <div style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--warning); padding: 0.85rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1.5rem; font-size: 0.88rem; line-height: 1.5;">
+                        🛡️ <strong>Administrator Reconfiguration Mode:</strong><br>
+                        You are authenticated as an Administrator. You can update MySQL database connection credentials, re-run table schemas, or update administrator settings below.
+                    </div>
+                <?php endif; ?>
+
                 <form method="POST" action="install.php">
                     <input type="hidden" name="action" value="install">
 
